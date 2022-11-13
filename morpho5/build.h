@@ -167,6 +167,9 @@
 /** @brief Debug symbol table */
 //#define MORPHO_DEBUG_SYMBOLTABLE
 
+/** @brief Debug morpho memory allocation for leaks */
+// #define MORPHO_DEBUG_MEMORYLEAK
+
 /** @brief Diagnose opcode usage */
 //#define MORPHO_OPCODE_USAGE
 

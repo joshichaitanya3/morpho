@@ -56,7 +56,7 @@ bool varray_##name##add(varray_##name *v, type *data, int count) { \
     if (v->capacity<v->count + count) { \
         unsigned int capacity = varray_powerof2ceiling(v->count + count); \
         v->data = (type *) morpho_allocate(v->data, v->capacity * sizeof(type), \
-                            capacity * sizeof(type)); \
+                            capacity * sizeof(type), __FILE__, __LINE__); \
         v->capacity = capacity; \
     }; \
     \
@@ -70,7 +70,7 @@ bool varray_##name##resize(varray_##name *v, int count) { \
     if (v->capacity<v->count + count) { \
         unsigned int capacity = varray_powerof2ceiling(v->count + count); \
         v->data = (type *) morpho_allocate(v->data, v->capacity * sizeof(type), \
-                            capacity * sizeof(type)); \
+                            capacity * sizeof(type), __FILE__, __LINE__); \
         v->capacity = capacity; \
     }; \
     return (v->data!=NULL); \
@@ -82,7 +82,7 @@ int varray_##name##write(varray_##name *v, type data) { \
 } \
 \
 void varray_##name##clear(varray_##name *v) { \
-    morpho_allocate(v->data, 0, 0); \
+    morpho_allocate(v->data, 0, 0, __FILE__, __LINE__); \
     varray_##name##init(v); \
 } \
 bool varray_##name##pop(varray_##name *v, type *dest) { \
