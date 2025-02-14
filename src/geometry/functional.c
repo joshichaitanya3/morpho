@@ -5,6 +5,7 @@
  */
 
 #include <float.h>
+#include <math.h>
 
 #include "functional.h"
 #include "morpho.h"
@@ -15,8 +16,7 @@
 
 #include "matrix.h"
 #include "sparse.h"
-#include "integrate.h"
-#include <math.h>
+#include "geometry.h"
 
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
@@ -1313,18 +1313,29 @@ bool functional_numericalfieldgrad(vm *v, objectmesh *mesh, elementid eid, objec
 typedef struct {
     objectfield *field;
     functional_integrand *integrand;
+    discretization *disc;
     void *ref;
 } functional_numericalfieldgradientref;
 
 /** Computes the gradient of element id with respect to its constituent vertices and any dependencies */
 bool functional_numericalfieldgradientmapfn(vm *v, objectmesh *mesh, elementid id, int nv, int *vid, void *ref, void *out) {
     functional_numericalfieldgradientref *tref=(functional_numericalfieldgradientref *) ref;
-    grade g=0;
     
-    /* Temporary code: Should establish dependencies from the discretization
-       For now, we simply loop over the vertices */
-    for (elementid k=0; k<nv; k++) {
-        if (!functional_numericalfieldgrad(v, mesh, id, tref->field, g, vid[k], nv, vid, tref->integrand, tref->ref, out)) return false;
+    /* TODO: Should establish dependencies from the discretizationfv   */
+    if (tref->disc) {
+        int nnodes=tref->disc->nnodes;
+        fieldindx findx[nnodes];
+        
+        if (discretization_doftofieldindx(tref->field, tref->disc, nv, vid, findx)) {
+            for (int k=0; k<nnodes; k++) {
+                if (!functional_numericalfieldgrad(v, mesh, id, tref->field, findx[k].g, findx[k].id, nv, vid, tref->integrand, tref->ref, out)) return false;
+            }
+        }
+        
+    } else {
+        for (elementid k=0; k<nv; k++) {
+            if (!functional_numericalfieldgrad(v, mesh, id, tref->field, MESH_GRADE_VERTEX, vid[k], nv, vid, tref->integrand, tref->ref, out)) return false;
+        }
     }
     
     return true;
@@ -1363,6 +1374,13 @@ bool functional_mapnumericalfieldgradient(vm *v, functional_mapinfo *info, value
         } else UNREACHABLE("Functional calls numericalfieldgradient but doesn't provide cloneref");
         tref[i].integrand=info->integrand;
         tref[i].field=fieldclones[i];
+        tref[i].disc=NULL;
+        if (MORPHO_ISDISCRETIZATION(tref[i].field->fnspc)) {
+            tref[i].disc=MORPHO_GETDISCRETIZATION(tref[i].field->fnspc)->discretization;
+            if (info->g<tref[i].disc->grade) {
+                if (!discretization_lower(tref[i].disc, info->g, &tref[i].disc)) return false;
+            }
+        }
         
         task[i].ref=(void *) &tref[i]; // Use this to pass the info structure
         task[i].mapfn=functional_numericalfieldgradientmapfn;
@@ -4379,12 +4397,14 @@ bool integral_preparequantities(integralref *iref, int nv, int *vid, quantity *q
             quantities[k].nnodes=disc->nnodes;
             quantities[k].ifn=disc->ifn;
             
-            int dof[disc->nnodes];
-            discretization_doftofieldindx(f, disc, nv, vid, dof);
+            fieldindx findx[disc->nnodes];
+            discretization_doftofieldindx(f, disc, nv, vid, findx);
             
             quantities[k].vals=MORPHO_MALLOC(sizeof(value)*disc->nnodes);
             for (int i=0; i<disc->nnodes; i++) {
-                field_getelementwithindex(f, dof[i], &quantities[k].vals[i]);
+                int dof;
+                field_getindex(f, findx[i].g, findx[i].id, findx[i].indx, &dof);
+                field_getelementwithindex(f, dof, &quantities[k].vals[i]);
             }
             success=true;
         } else {

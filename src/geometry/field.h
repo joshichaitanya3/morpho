@@ -47,6 +47,16 @@ typedef struct {
 objectfield *object_newfield(objectmesh *mesh, value prototype, value disc, unsigned int *shape);
 
 /* -------------------------------------------------------
+ * Indexing a Field
+ * ------------------------------------------------------- */
+
+typedef struct {
+    grade g;      // The grade
+    elementid id; // The element
+    int indx;     // Quantity index
+} fieldindx;
+
+/* -------------------------------------------------------
  * Field class
  * ------------------------------------------------------- */
 

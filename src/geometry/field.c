@@ -211,10 +211,13 @@ bool field_applyfunctiontoelements(vm *v, objectmesh *mesh, value fn, value fnsp
         double *x[nv]; // Fetch vertex positions
         for (int i=0; i<nv; i++) mesh_getvertexcoordinatesaslist(mesh, vids[i], &x[i]);
 
-        int indx[disc->nnodes]; // Get indices corresponding to each degree of freedom per element
-        if (!discretization_doftofieldindx(field, disc, nv, vids, indx)) return false;
+        fieldindx findx[disc->nnodes];
+        if (!discretization_doftofieldindx(field, disc, nv, vids, findx)) return false;
 
         for (int i=0; i<disc->nnodes; i++) { // Loop over nodes
+            int indx;
+            if (!field_getindex(field, findx[i].g, findx[i].id, findx[i].indx, &indx)) return false;
+            
             double lambda[nv], ll=0.0; // Convert node positions in reference element to barycentric coordinates
             for (int j=0; j<nv-1; j++) { lambda[j+1]=disc->nodes[i*disc->grade+j]; ll+=lambda[j+1]; }
             lambda[0]=1-ll;
@@ -240,7 +243,7 @@ bool field_applyfunctiontoelements(vm *v, objectmesh *mesh, value fn, value fnsp
             //morpho_printvalue(v, ret);
             //printf(" -> %i\n", indx[i]);
 
-            if (!field_setelementwithindex(field, indx[i], ret)) {
+            if (!field_setelementwithindex(field, indx, ret)) {
                 morpho_runtimeerror(v, FIELD_OPRETURN);
                 return false;
             }

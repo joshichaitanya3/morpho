@@ -78,7 +78,7 @@ typedef struct {
 discretization *discretization_find(char *name, grade g);
 discretization *discretization_findlinear(grade g);
 
-bool discretization_doftofieldindx(objectfield *field, discretization *disc, int nv, int *vids, int *dof);
+bool discretization_doftofieldindx(objectfield *field, discretization *disc, int nv, int *vids, fieldindx *findx);
 
 bool discretization_lower(discretization *disc, grade target, discretization **out);
 

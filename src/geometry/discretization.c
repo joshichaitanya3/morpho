@@ -346,7 +346,7 @@ discretization *discretization_findlinear(grade g) {
 #define FETCH(instr) (*(instr++))
 
 /** Steps through an element definition, generating subelements and identifying quantities */
-bool discretization_doftofieldindx(objectfield *field, discretization *disc, int nv, int *vids, int *dof) {
+bool discretization_doftofieldindx(objectfield *field, discretization *disc, int nv, int *vids, fieldindx *findx) {
     elementid subel[disc->nsubel+1]; // Element IDs of sub elements
     int sid, svids[nv], nmatch, k=0;
     
@@ -367,10 +367,10 @@ bool discretization_doftofieldindx(objectfield *field, discretization *disc, int
                 break;
             case QUANTITY_OPCODE:
             {
-                grade g = FETCH(instr);
-                int sid = FETCH(instr), qno = FETCH(instr);
-                
-                if (!field_getindex(field, g, (g==0 ? vids[sid]: subel[sid]), qno, &dof[k])) return false;
+                findx[k].g=FETCH(instr);
+                int sid=FETCH(instr);
+                findx[k].id=(findx[k].g==0 ? vids[sid]: subel[sid]);
+                findx[k].indx=FETCH(instr);
                 k++;
             }
                 break;
@@ -406,7 +406,11 @@ bool discretization_layout(objectfield *field, discretization *disc, objectspars
         if (!mesh_getconnectivity(conn, id, &nv, &vids)) goto discretization_layout_cleanup;
      
         new->ccs.cptr[id]=id*disc->nnodes;
-        if (!discretization_doftofieldindx(field, disc, nv, vids, new->ccs.rix+new->ccs.cptr[id])) goto discretization_layout_cleanup;
+        fieldindx findx[disc->nnodes];
+        if (!discretization_doftofieldindx(field, disc, nv, vids, findx)) goto discretization_layout_cleanup;
+        for (int i=0; i<disc->nnodes; i++) {
+            if (!field_getindex(field, findx[i].g, findx[i].id, findx[i].indx, new->ccs.rix+new->ccs.cptr[id]+i)) goto discretization_layout_cleanup;
+        }
     }
     new->ccs.cptr[nel]=nel*disc->nnodes; // Last column pointer points to next column
     
