@@ -5,6 +5,8 @@
 */
 
 #include <limits.h>
+#include <float.h>
+
 #include "integrate.h"
 #include "morpho.h"
 #include "classes.h"
