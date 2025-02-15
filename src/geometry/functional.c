@@ -1291,7 +1291,8 @@ bool functional_numericalfieldgrad(vm *v, objectmesh *mesh, elementid eid, objec
     
     /* Loop over dofs in field entry */
     for (int j=0; j<field->psize*field->dof[g]; j++) {
-        int k=field->offset[g]+i*field->psize*field->dof[g]+j;
+        int k=(field->offset[g]+i)*field->psize*field->dof[g]+j;
+        
         double f0=field->data.elements[k];
         
         eps=functional_fdstepsize(f0, 1);
@@ -1321,7 +1322,6 @@ typedef struct {
 bool functional_numericalfieldgradientmapfn(vm *v, objectmesh *mesh, elementid id, int nv, int *vid, void *ref, void *out) {
     functional_numericalfieldgradientref *tref=(functional_numericalfieldgradientref *) ref;
     
-    /* TODO: Should establish dependencies from the discretizationfv   */
     if (tref->disc) {
         int nnodes=tref->disc->nnodes;
         fieldindx findx[nnodes];
@@ -1345,7 +1345,8 @@ bool functional_numericalfieldgradientmapfn(vm *v, objectmesh *mesh, elementid i
 bool functional_mapnumericalfieldgradient(vm *v, functional_mapinfo *info, value *out) {
     int success=false;
     int ntask=morpho_threadnumber();
-    if (!ntask) return functional_mapnumericalfieldgradientX(v, info, out);
+    //if (!ntask) return functional_mapnumericalfieldgradientX(v, info, out);
+    if (ntask<1) ntask=1; 
     functional_task task[ntask];
     
     varray_elementid imageids;
