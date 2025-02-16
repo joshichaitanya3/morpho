@@ -2131,7 +2131,6 @@ void integrator_clear(integrator *integrate) {
     varray_quadratureworkitemclear(&integrate->worklist);
     varray_intclear(&integrate->elementstack);
     varray_doubleclear(&integrate->vertexstack);
-    for (int i=0; i<integrate->nquantity; i++) morpho_freeobject(integrate->qval[i]);
 }
 
 /** Adds a vertex to the integrators vertex stack, returning the id */
@@ -2166,6 +2165,11 @@ void integrator_initializequantities(integrator *integrate, int nq, quantity *qu
             integrate->qval[i]=MORPHO_OBJECT(new);
         } else return;
     }
+}
+
+/** Frees up any objects used in the quantities list */
+void integrator_finalizequantities(integrator *integrate) {
+    for (int i=0; i<integrate->nquantity; i++) morpho_freeobject(integrate->qval[i]);
 }
 
 /** Retrieves the vertex pointers given an elementid.
@@ -2343,19 +2347,6 @@ void integrator_interpolatequantities(integrator *integrate, double *bary) {
         }
         
         integrator_sumquantityweighted(nnodes, wts, integrate->quantity[i].vals, &integrate->qval[i]);
-        
-/*        if (MORPHO_ISFLOAT(integrate->qval[i])) {
-            double qval[nnodes];
-            for (int j=0; j<nnodes; j++) qval[j]=MORPHO_GETFLOATVALUE(integrate->quantity[i].vals[j]);
-            double val=integrator_sumlistweighted(nnodes, qval, wts);
-            integrate->qval[i]=MORPHO_FLOAT(val);
-        } else if (MORPHO_ISMATRIX(integrate->qval[i])) {
-            objectmatrix *out = MORPHO_GETMATRIX(integrate->qval[i]);
-            matrix_zero(out);
-            for (int j=0; j<nnodes; j++) {
-                matrix_accumulate(out, wts[j], MORPHO_GETMATRIX(integrate->quantity[i].vals[j]));
-            }
-        }*/
     }
 }
 
@@ -2680,6 +2671,7 @@ bool integrator_configurewithdictionary(integrator *integrate, error *err, grade
  * @param[in] ref                  - a pointer to any data required by the function
  * @returns True on success */
 bool integrator_integrate(integrator *integrate, integrandfunction *integrand, int dim, double **x, unsigned int nquantity, quantity *quantity, void *ref) {
+    bool success=false;
     
     integrate->integrand=integrand; // Integrand function
     integrate->ref=ref;
@@ -2728,7 +2720,7 @@ bool integrator_integrate(integrator *integrate, integrandfunction *integrand, i
         int nels; // Number of elements created
         quadratureworkitem newitems[integrate->subdivide->nels];
         
-        if (!integrator_subdivide(integrate, &work, &nels, newitems)) return false;
+        if (!integrator_subdivide(integrate, &work, &nels, newitems)) goto integrator_integrate_error;
         for (int k=0; k<nels; k++) integrator_quadrature(integrate, integrate->rule, &newitems[k]);
         
         // Error estimate
@@ -2741,7 +2733,12 @@ bool integrator_integrate(integrator *integrate, integrandfunction *integrand, i
     // Final estimate by Kahan summing heap
     integrator_estimate(integrate);
     
-    return true;
+    success=true;
+    
+integrator_integrate_error:
+    integrator_finalizequantities(integrate);
+    
+    return success;
 }
 
 /* ---------------------------------------
