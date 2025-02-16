@@ -69,6 +69,8 @@ extern value field_gradeoption;
 
 #define FIELD_OP_METHOD      "op"
 #define FIELD_SHAPE_METHOD   "shape"
+#define FIELD_FNSPACE_METHOD   "functionspace"
+#define FIELD_PROTOTYPE_METHOD   "prototype"
 #define FIELD_MESH_METHOD    "mesh"
 #define FIELD_LINEARIZE_METHOD    "linearize"
 #define FIELD__LINEARIZE_METHOD    "__linearize"

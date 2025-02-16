@@ -914,6 +914,20 @@ value Field_shape(vm *v, int nargs, value *args) {
     return out;
 }
 
+/** Get the functionspace used by a field */
+value Field_fnspace(vm *v, int nargs, value *args) {
+    objectfield *f=MORPHO_GETFIELD(MORPHO_SELF(args));
+    
+    return f->fnspc;
+}
+
+/** Get a prototype used by the field */
+value Field_prototype(vm *v, int nargs, value *args) {
+    objectfield *f=MORPHO_GETFIELD(MORPHO_SELF(args));
+    
+    return f->prototype;
+}
+
 /** Get the mesh associated with a field */
 value Field_mesh(vm *v, int nargs, value *args) {
     objectfield *f=MORPHO_GETFIELD(MORPHO_SELF(args));
@@ -962,6 +976,8 @@ MORPHO_METHOD(FIELD_OP_METHOD, Field_op, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(MORPHO_PRINT_METHOD, Field_print, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(MORPHO_CLONE_METHOD, Field_clone, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD_SHAPE_METHOD, Field_shape, BUILTIN_FLAGSEMPTY),
+MORPHO_METHOD(FIELD_FNSPACE_METHOD, Field_fnspace, BUILTIN_FLAGSEMPTY),
+MORPHO_METHOD(FIELD_PROTOTYPE_METHOD, Field_prototype, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD_MESH_METHOD, Field_mesh, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD_LINEARIZE_METHOD, Field_linearize, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD__LINEARIZE_METHOD, Field_unsafelinearize, BUILTIN_FLAGSEMPTY)
