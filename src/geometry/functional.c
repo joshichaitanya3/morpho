@@ -1346,7 +1346,7 @@ bool functional_mapnumericalfieldgradient(vm *v, functional_mapinfo *info, value
     int success=false;
     int ntask=morpho_threadnumber();
     //if (!ntask) return functional_mapnumericalfieldgradientX(v, info, out);
-    if (ntask<1) ntask=1; 
+    if (ntask<1) ntask=1;
     functional_task task[ntask];
     
     varray_elementid imageids;
@@ -4069,6 +4069,48 @@ static value integral_normal(vm *v, int nargs, value *args) {
 
 bool integrator_sumquantityweighted(int n, double *wts, value *q, value *out);
 
+/** @brief Prepares an inverse jacobian matrix.
+    @param[in] dim - dimension of physical space
+    @param[in] g - grade of the object
+    @param[in] x - list of vertex positions (grade+1 entries, each of length dim)
+    @param[out] invj - inverse jacobian for the transformation (dim*g entries) */
+bool integral_prepareinvjacobian(unsigned int dim, grade g, double **x, objectmatrix *invj) {
+    bool success=false;
+    
+    // Construct the (dim x g) matrix of edge vectors
+    double s[dim*g];
+    for (int i=0; i<g; i++) functional_vecsub(dim, x[i+1], x[0], s + i*dim);
+    
+    if (g==dim) {
+        objectmatrix smat = MORPHO_STATICMATRIX(s, dim, dim);
+        success=(matrix_inverse(&smat, invj)==MATRIX_OK);
+    } else if (g==1) {
+        double s01norm = functional_vecdot(dim, s, s);
+        if (s01norm>0) {
+            functional_vecscale(dim, 1.0/s01norm, s, invj->elements);
+            success=true;
+        }
+    } else if (g==2 && dim==3) {
+        double *s0 = s, *s1 = s+dim, s0xs1[dim], u[dim], v[dim*g];
+        functional_veccross(s0, s1, s0xs1);
+        double s0xs1norm = functional_vecnorm(dim, s0xs1);
+        if (s0xs1norm>0) {
+            double invs0xs1norm = 1/(s0xs1norm*s0xs1norm);
+            functional_veccross(s1, s0xs1, u);
+            functional_vecscale(dim, invs0xs1norm, u, v);
+            functional_veccross(s0xs1, s0, u);
+            functional_vecscale(dim, invs0xs1norm, u, v+dim);
+            
+            objectmatrix invjt = MORPHO_STATICMATRIX(v, dim, g);
+            
+            matrix_transpose(&invjt, invj);
+            
+            success=true;
+        }
+    }
+    return success;
+}
+
 /** Allocate suitable storage for the gradient */
 bool integral_gradalloc(int dim, value prototype, value *out) {
     if (MORPHO_ISNIL(prototype)) { // Scalar
@@ -4174,8 +4216,14 @@ bool integral_evaluategradient(vm *v, value q, value *out) {
     // Evaluate gradient
     if (MORPHO_ISDISCRETIZATION(fld->fnspc)) {
         if (!elref->invj) {
-            morpho_runtimeerror(v, INTEGRAL_GRDEVL);
-            return false;
+            elref->invj=object_newmatrix(elref->g, elref->mesh->dim, false);
+            
+            if (elref->invj) {
+                integral_prepareinvjacobian(elref->mesh->dim, elref->g, elref->vertexposn, elref->invj);
+            } else {
+                morpho_runtimeerror(v, INTEGRAL_GRDEVL);
+                return false;
+            }
         }
         
         int nnodes = MORPHO_GETDISCRETIZATION(fld->fnspc)->discretization->nnodes;
@@ -4390,6 +4438,11 @@ void integral_freeref(void *ref) {
     MORPHO_FREE(ref);
 }
 
+/** Clears any data in an element ref */
+void integral_clearelref(objectintegralelementref *elref) {
+    if (elref->invj) object_free((object *) elref->invj);
+}
+
 /** Prepares quantity list */
 bool integral_preparequantities(integralref *iref, int nv, int *vid, quantity *quantities) {
     bool success=false;
@@ -4433,48 +4486,6 @@ void integral_clearquantities(int nq, quantity *quantities) {
     for (int k=0; k<nq; k++) {
         if (quantities[k].vals) MORPHO_FREE(quantities[k].vals);
     }
-}
-
-/** @brief Prepares an inverse jacobian matrix.
-    @param[in] dim - dimension of physical space
-    @param[in] g - grade of the object
-    @param[in] x - list of vertex positions (grade+1 entries, each of length dim)
-    @param[out] invj - inverse jacobian for the transformation (dim*g entries) */
-bool integral_prepareinvjacobian(unsigned int dim, grade g, double **x, objectmatrix *invj) {
-    bool success=false;
-    
-    // Construct the (dim x g) matrix of edge vectors
-    double s[dim*g];
-    for (int i=0; i<g; i++) functional_vecsub(dim, x[i+1], x[0], s + i*dim);
-    
-    if (g==dim) {
-        objectmatrix smat = MORPHO_STATICMATRIX(s, dim, dim);
-        success=(matrix_inverse(&smat, invj)==MATRIX_OK);
-    } else if (g==1) {
-        double s01norm = functional_vecdot(dim, s, s);
-        if (s01norm>0) {
-            functional_vecscale(dim, 1.0/s01norm, s, invj->elements);
-            success=true; 
-        }
-    } else if (g==2 && dim==3) {
-        double *s0 = s, *s1 = s+dim, s0xs1[dim], u[dim], v[dim*g];
-        functional_veccross(s0, s1, s0xs1);
-        double s0xs1norm = functional_vecnorm(dim, s0xs1);
-        if (s0xs1norm>0) {
-            double invs0xs1norm = 1/(s0xs1norm*s0xs1norm);
-            functional_veccross(s1, s0xs1, u);
-            functional_vecscale(dim, invs0xs1norm, u, v);
-            functional_veccross(s0xs1, s0, u);
-            functional_vecscale(dim, invs0xs1norm, u, v+dim);
-            
-            objectmatrix invjt = MORPHO_STATICMATRIX(v, dim, g);
-            
-            matrix_transpose(&invjt, invj);
-            
-            success=true;
-        }
-    }
-    return success;
 }
 
 bool integral_integrandfn(unsigned int dim, double *t, double *x, unsigned int nquantity, value *quantity, void *ref, double *fout) {
@@ -4536,14 +4547,10 @@ bool lineintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *
         integral_preparequantities(&iref, nv, vid, quantities);
         elref.quantities=quantities;
         
-        double invjdata[MESH_GRADE_LINE*mesh->dim];
-        objectmatrix invj = MORPHO_STATICMATRIX(invjdata, MESH_GRADE_LINE, mesh->dim);
-        integral_prepareinvjacobian(mesh->dim, MESH_GRADE_LINE, x, &invj);
-        elref.invj = &invj;
-        
         success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), morpho_geterror(v), mesh->dim, MESH_GRADE_LINE, x, iref.nfields, quantities, &iref, out, &err);
         
         integral_clearquantities(iref.nfields, quantities);
+        integral_clearelref(&elref);
     } else { // Old integrator
         value q0[iref.nfields+1], q1[iref.nfields+1];
         value *q[2] = { q0, q1 };
@@ -4704,14 +4711,10 @@ bool areaintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *
         integral_preparequantities(&iref, nv, vid, quantities);
         elref.quantities=quantities;
         
-        double invjdata[(MESH_GRADE_AREA)*mesh->dim];
-        objectmatrix invj = MORPHO_STATICMATRIX(invjdata, MESH_GRADE_AREA, mesh->dim);
-        integral_prepareinvjacobian(mesh->dim, MESH_GRADE_AREA, x, &invj);
-        elref.invj = &invj;
-        
         success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), morpho_geterror(v), mesh->dim, MESH_GRADE_AREA, x, iref.nfields, quantities, &iref, out, &err);
         
         integral_clearquantities(iref.nfields, quantities);
+        integral_clearelref(&elref);
     } else {
         value q0[iref.nfields+1], q1[iref.nfields+1], q2[iref.nfields+1];
         value *q[3] = { q0, q1, q2 };
@@ -4875,37 +4878,9 @@ MORPHO_METHOD(FUNCTIONAL_GRADIENT_METHOD, VolumeIntegral_gradient, BUILTIN_FLAGS
 MORPHO_METHOD(FUNCTIONAL_FIELDGRADIENT_METHOD, VolumeIntegral_fieldgradient, BUILTIN_FLAGSEMPTY)
 MORPHO_ENDCLASS
 
-
 /* **********************************************************************
  * Initialization
  * ********************************************************************** */
-
-/*double ff(double x) {
-    return exp(x);
-}
-
-double dff(double x) {
-    return exp(x);
-}
-
-void functional_fdtest(void) {
-    double h1 = 1e-8;
-    
-    //double xi[] = { -100, -10, -1.0, 0.0, 1e-7, 1e-5, 1e-2, 0.1, 1, 10, 100, 1e100 };
-    
-    for (int i=-6; i<3; i++) {
-        double x = pow(10.0, (double) i);
-        double fex = dff(x);
-    
-        double f1=(ff(x+h1)-ff(x-h1))/(2*h1);
-        
-        double h2=functional_fdstepsize(x, 1);
-        double f2=(ff(x+h2)-ff(x-h2))/(2*h2);
-        
-        printf("%g: %g %g %g\n", x, fex, fabs((f1-fex)/fex), fabs((f2-fex)/fex));
-    }
-    
-}*/
 
 void functional_initialize(void) {
     fddelta1 = pow(MORPHO_EPS, 1.0/3.0);
