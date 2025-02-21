@@ -11,7 +11,7 @@ mb.addface([0,1,2])
 var m = mb.build() 
 m.addgrade(1)
 
-var f = Field(m, fn (x,y) Matrix([x^2,y^2]), functionspace=FunctionSpace("CG2", grade=2))
+var f = Field(m, fn (x,y) Matrix([x^2,y^2]), finiteelementspace=FiniteElementSpace("CG2", grade=2))
 
 fn elasticity(x, f) {
     var g = grad(f)

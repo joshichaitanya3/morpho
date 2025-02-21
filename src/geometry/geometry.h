@@ -11,7 +11,7 @@
 #include "field.h"
 #include "selection.h"
 #include "functional.h"
-#include "discretization.h"
+#include "fespace.h"
 #include "integrate.h"
 
 void geometry_initialize(void);

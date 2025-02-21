@@ -16,7 +16,7 @@ fn f0(x,y) {
     return Matrix([[x+y, x^2+y^2], [-(x^2+y^2),x-y]])
 }
 
-var f = Field(m, f0, functionspace=FunctionSpace("CG2", grade=2))
+var f = Field(m, f0, finiteelementspace=FiniteElementSpace("CG2", grade=2))
 
 print abs(AreaIntegral(fn (x, q) q[0,0], f, method={ }).total(m) - 8) < 1e-8
 // expect: true

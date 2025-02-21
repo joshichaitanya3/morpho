@@ -12,9 +12,9 @@ mb.addface([1,3,2])
 var m = mb.build()
 m.addgrade(1)
 
-var l = FunctionSpace("CG2", grade=2)
+var l = FiniteElementSpace("CG2", grade=2)
 
-var f = Field(m, fn (x,y) Matrix([[x,y],[-y, x]]), functionspace=l)
+var f = Field(m, fn (x,y) Matrix([[x,y],[-y, x]]), finiteelementspace=l)
 
 print f.shape() // expect: [ 1, 1, 0 ]
 

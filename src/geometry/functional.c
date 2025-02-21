@@ -1314,7 +1314,7 @@ bool functional_numericalfieldgrad(vm *v, objectmesh *mesh, elementid eid, objec
 typedef struct {
     objectfield *field;
     functional_integrand *integrand;
-    discretization *disc;
+    fespace *disc;
     void *ref;
 } functional_numericalfieldgradientref;
 
@@ -1326,7 +1326,7 @@ bool functional_numericalfieldgradientmapfn(vm *v, objectmesh *mesh, elementid i
         int nnodes=tref->disc->nnodes;
         fieldindx findx[nnodes];
         
-        if (discretization_doftofieldindx(tref->field, tref->disc, nv, vid, findx)) {
+        if (fespace_doftofieldindx(tref->field, tref->disc, nv, vid, findx)) {
             for (int k=0; k<nnodes; k++) {
                 if (!functional_numericalfieldgrad(v, mesh, id, tref->field, findx[k].g, findx[k].id, nv, vid, tref->integrand, tref->ref, out)) return false;
             }
@@ -1376,10 +1376,10 @@ bool functional_mapnumericalfieldgradient(vm *v, functional_mapinfo *info, value
         tref[i].integrand=info->integrand;
         tref[i].field=fieldclones[i];
         tref[i].disc=NULL;
-        if (MORPHO_ISDISCRETIZATION(tref[i].field->fnspc)) {
-            tref[i].disc=MORPHO_GETDISCRETIZATION(tref[i].field->fnspc)->discretization;
+        if (MORPHO_ISFESPACE(tref[i].field->fnspc)) {
+            tref[i].disc=MORPHO_GETFESPACE(tref[i].field->fnspc)->fespace;
             if (info->g<tref[i].disc->grade) {
-                if (!discretization_lower(tref[i].disc, info->g, &tref[i].disc)) return false;
+                if (!fespace_lower(tref[i].disc, info->g, &tref[i].disc)) return false;
             }
         }
         
@@ -4214,7 +4214,7 @@ bool integral_evaluategradient(vm *v, value q, value *out) {
     bool success=false;
     
     // Evaluate gradient
-    if (MORPHO_ISDISCRETIZATION(fld->fnspc)) {
+    if (MORPHO_ISFESPACE(fld->fnspc)) {
         if (!elref->invj) {
             elref->invj=object_newmatrix(elref->g, elref->mesh->dim, false);
             
@@ -4226,12 +4226,12 @@ bool integral_evaluategradient(vm *v, value q, value *out) {
             }
         }
         
-        int nnodes = MORPHO_GETDISCRETIZATION(fld->fnspc)->discretization->nnodes;
+        int nnodes = MORPHO_GETFESPACE(fld->fnspc)->fespace->nnodes;
         double gdata[nnodes * elref->g];
         objectmatrix gmat = MORPHO_STATICMATRIX(gdata, nnodes, elref->g);
         
         // Compute gradient in reference frame
-        discretization_gradient(MORPHO_GETDISCRETIZATION(fld->fnspc)->discretization,
+        fespace_gradient(MORPHO_GETFESPACE(fld->fnspc)->fespace,
                                 elref->lambda, &gmat);
         
         // Compute matrix
@@ -4449,17 +4449,17 @@ bool integral_preparequantities(integralref *iref, int nv, int *vid, quantity *q
     for (int k=0; k<iref->nfields; k++) {
         objectfield *f=MORPHO_GETFIELD(iref->fields[k]);
         
-        if (MORPHO_ISDISCRETIZATION(f->fnspc)) {
-            discretization *disc=MORPHO_GETDISCRETIZATION(f->fnspc)->discretization;
+        if (MORPHO_ISFESPACE(f->fnspc)) {
+            fespace *disc=MORPHO_GETFESPACE(f->fnspc)->fespace;
             if (nv-1<disc->grade) {
-                if (!discretization_lower(disc, nv-1, &disc)) return false;
+                if (!fespace_lower(disc, nv-1, &disc)) return false;
             }
             
             quantities[k].nnodes=disc->nnodes;
             quantities[k].ifn=disc->ifn;
             
             fieldindx findx[disc->nnodes];
-            discretization_doftofieldindx(f, disc, nv, vid, findx);
+            fespace_doftofieldindx(f, disc, nv, vid, findx);
             
             quantities[k].vals=MORPHO_MALLOC(sizeof(value)*disc->nnodes);
             for (int i=0; i<disc->nnodes; i++) {

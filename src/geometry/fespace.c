@@ -1,7 +1,7 @@
-/** @file discretization.c
+/** @file fespace.c
  *  @author T J Atherton
  *
- *  @brief Finite element discretizations
+ *  @brief Finite element fespaces
  */
 
 #include "geometry.h"
@@ -10,30 +10,30 @@
  * Discretization objects
  * ********************************************************************** */
 
-objecttype objectdiscretizationtype;
+objecttype objectfespacetype;
 
 /** Field object definitions */
-void objectdiscretization_printfn(object *obj, void *v) {
-    objectdiscretization *disc=(objectdiscretization *) obj;
-    morpho_printf(v, "<FunctionSpace %s>", disc->discretization->name);
+void objectfespace_printfn(object *obj, void *v) {
+    objectfespace *disc=(objectfespace *) obj;
+    morpho_printf(v, "<FunctionSpace %s>", disc->fespace->name);
 }
 
-size_t objectdiscretization_sizefn(object *obj) {
-    return sizeof(objectdiscretization);
+size_t objectfespace_sizefn(object *obj) {
+    return sizeof(objectfespace);
 }
 
-objecttypedefn objectdiscretizationdefn = {
-    .printfn=objectdiscretization_printfn,
+objecttypedefn objectfespacedefn = {
+    .printfn=objectfespace_printfn,
     .markfn=NULL,
     .freefn=NULL,
-    .sizefn=objectdiscretization_sizefn
+    .sizefn=objectfespace_sizefn
 };
 
-/** Creates a new discretization object
- * @param[in] discretization - discretization definition to use */
-objectdiscretization *objectdiscretization_new(discretization *disc) {
-    objectdiscretization *new = (objectdiscretization *) object_new(sizeof(objectdiscretization), OBJECT_DISCRETIZATION);
-    if (new) new->discretization=disc;
+/** Creates a new fespace object
+ * @param[in] fespace - fespace definition to use */
+objectfespace *objectfespace_new(fespace *disc) {
+    objectfespace *new = (objectfespace *) object_new(sizeof(objectfespace), OBJECT_FESPACE);
+    if (new) new->fespace=disc;
     
     return new;
 }
@@ -81,7 +81,7 @@ eldefninstruction cg1_1ddefn[] = {
     ENDDEFN
 };
 
-discretization cg1_1d = {
+fespace cg1_1d = {
     .name = "CG1",
     .grade = 1,
     .shape = cg1_1dshape,
@@ -132,7 +132,7 @@ eldefninstruction cg2_1ddefn[] = {
     ENDDEFN
 };
 
-discretization cg2_1d = {
+fespace cg2_1d = {
     .name = "CG2",
     .grade = 1,
     .shape = cg2_1dshape,
@@ -175,7 +175,7 @@ eldefninstruction cg3_1ddefn[] = {
     ENDDEFN
 };
 
-discretization cg3_1d = {
+fespace cg3_1d = {
     .name = "CG3",
     .grade = 1,
     .shape = cg3_1dshape,
@@ -224,12 +224,12 @@ eldefninstruction cg1_2deldefn[] = {
     ENDDEFN
 };
 
-discretization *cg1_2d_lower[] = {
+fespace *cg1_2d_lower[] = {
     &cg1_1d,
     NULL
 };
 
-discretization cg1_2d = {
+fespace cg1_2d = {
     .name = "CG1",
     .grade = 2,
     .shape = cg1_2dshape,
@@ -295,12 +295,12 @@ eldefninstruction cg2_2deldefn[] = {
     ENDDEFN
 };
 
-discretization *cg2_2d_lower[] = {
+fespace *cg2_2d_lower[] = {
     &cg2_1d,
     NULL
 };
 
-discretization cg2_2d = {
+fespace cg2_2d = {
     .name = "CG2",
     .grade = 2,
     .shape = cg2_2dshape,
@@ -314,7 +314,7 @@ discretization cg2_2d = {
     .lower = cg2_2d_lower
 };
 
-discretization *discretizations[] = {
+fespace *fespaces[] = {
     &cg1_1d,
     &cg2_1d,
     &cg1_2d,
@@ -326,19 +326,19 @@ discretization *discretizations[] = {
  * Discretization functions
  * ********************************************************************** */
 
-/** Find a discretization definition based on a name and grade */
-discretization *discretization_find(char *name, grade g) {
-    for (int i=0; discretizations[i]!=NULL; i++) {
-        if (strcmp(name, discretizations[i]->name)==0 &&
-            g==discretizations[i]->grade) return discretizations[i];
+/** Find a fespace definition based on a name and grade */
+fespace *fespace_find(char *name, grade g) {
+    for (int i=0; fespaces[i]!=NULL; i++) {
+        if (strcmp(name, fespaces[i]->name)==0 &&
+            g==fespaces[i]->grade) return fespaces[i];
     }
     return NULL;
 }
 
-/** Finds a linear discretization for a given grade */
-discretization *discretization_findlinear(grade g) {
-    for (int i=0; discretizations[i]!=NULL; i++) {
-        if (discretizations[i]->grade && discretizations[i]->degree==1) return discretizations[i];
+/** Finds a linear fespace for a given grade */
+fespace *fespace_findlinear(grade g) {
+    for (int i=0; fespaces[i]!=NULL; i++) {
+        if (fespaces[i]->grade && fespaces[i]->degree==1) return fespaces[i];
     }
     return NULL;
 }
@@ -346,7 +346,7 @@ discretization *discretization_findlinear(grade g) {
 #define FETCH(instr) (*(instr++))
 
 /** Steps through an element definition, generating subelements and identifying quantities */
-bool discretization_doftofieldindx(objectfield *field, discretization *disc, int nv, int *vids, fieldindx *findx) {
+bool fespace_doftofieldindx(objectfield *field, fespace *disc, int nv, int *vids, fieldindx *findx) {
     elementid subel[disc->nsubel+1]; // Element IDs of sub elements
     int sid, svids[nv], nmatch, k=0;
     
@@ -381,8 +381,8 @@ bool discretization_doftofieldindx(objectfield *field, discretization *disc, int
     return true;
 }
 
-/** Searches a discretization's lower list to find a discretization to use on a lower grade */
-bool discretization_lower(discretization *disc, grade target, discretization **out) {
+/** Searches a fespace's lower list to find a fespace to use on a lower grade */
+bool fespace_lower(fespace *disc, grade target, fespace **out) {
     if (disc->lower) for (int i=0; disc->lower[i]!=NULL; i++) {
         if (disc->lower[i]->grade==target) {
             *out = disc->lower[i];
@@ -393,7 +393,7 @@ bool discretization_lower(discretization *disc, grade target, discretization **o
 }
 
 /** Constructs a layout matrix that maps element ids (columns) to degree of freedom indices in a field */
-bool discretization_layout(objectfield *field, discretization *disc, objectsparse **out) {
+bool fespace_layout(objectfield *field, fespace *disc, objectsparse **out) {
     objectsparse *conn = mesh_getconnectivityelement(field->mesh, 0, disc->grade);
     elementid nel=mesh_nelements(conn);
     
@@ -403,13 +403,13 @@ bool discretization_layout(objectfield *field, discretization *disc, objectspars
     
     for (elementid id=0; id<nel; id++) {
         int nv, *vids;
-        if (!mesh_getconnectivity(conn, id, &nv, &vids)) goto discretization_layout_cleanup;
+        if (!mesh_getconnectivity(conn, id, &nv, &vids)) goto fespace_layout_cleanup;
      
         new->ccs.cptr[id]=id*disc->nnodes;
         fieldindx findx[disc->nnodes];
-        if (!discretization_doftofieldindx(field, disc, nv, vids, findx)) goto discretization_layout_cleanup;
+        if (!fespace_doftofieldindx(field, disc, nv, vids, findx)) goto fespace_layout_cleanup;
         for (int i=0; i<disc->nnodes; i++) {
-            if (!field_getindex(field, findx[i].g, findx[i].id, findx[i].indx, new->ccs.rix+new->ccs.cptr[id]+i)) goto discretization_layout_cleanup;
+            if (!field_getindex(field, findx[i].g, findx[i].id, findx[i].indx, new->ccs.rix+new->ccs.cptr[id]+i)) goto fespace_layout_cleanup;
         }
     }
     new->ccs.cptr[nel]=nel*disc->nnodes; // Last column pointer points to next column
@@ -417,17 +417,17 @@ bool discretization_layout(objectfield *field, discretization *disc, objectspars
     *out=new;
     return true;
     
-discretization_layout_cleanup:
+fespace_layout_cleanup:
     if (new) object_free((object *) new);
     return false;
 }
 
 /** @brief Calculates the gradient of the basis functions with respect to the reference coordinates.
- *  @param[in] disc - discretization to query
+ *  @param[in] disc - fespace to query
  *  @param[in] lambda - position in barycentric coordinates
  *  @param[out] grad - gradient of basis functions with respect to reference coordinates (disc->nnodes x disc->grade)
  */
-void discretization_gradient(discretization *disc, double *lambda, objectmatrix *grad) {
+void fespace_gradient(fespace *disc, double *lambda, objectmatrix *grad) {
     int nbary = disc->grade+1;
     
     // Compute gradients of the basis functions with respect to barycentric coordinates
@@ -443,8 +443,8 @@ void discretization_gradient(discretization *disc, double *lambda, objectmatrix 
  * FunctionSpace class
  * ********************************************************************** */
 
-/** Constructs a functionspace object */
-value functionspace_constructor(vm *v, int nargs, value *args) {
+/** Constructs a fespace object */
+value fespace_constructor(vm *v, int nargs, value *args) {
     value grd=MORPHO_INTEGER(1);
     value out=MORPHO_NIL;
     int nfixed;
@@ -457,10 +457,10 @@ value functionspace_constructor(vm *v, int nargs, value *args) {
         MORPHO_ISINTEGER(grd)) {
         char *label = MORPHO_GETCSTRING(MORPHO_GETARG(args, 0)); 
         
-        discretization *d=discretization_find(label, MORPHO_GETINTEGERVALUE(grd));
+        fespace *d=fespace_find(label, MORPHO_GETINTEGERVALUE(grd));
         
         if (d) {
-            objectdiscretization *obj=objectdiscretization_new(d);
+            objectfespace *obj=objectfespace_new(d);
             if (obj) {
                 out = MORPHO_OBJECT(obj);
                 morpho_bindobjects(v, 1, &out);
@@ -472,14 +472,14 @@ value functionspace_constructor(vm *v, int nargs, value *args) {
     return out;
 }
 
-value FunctionSpace_layout(vm *v, int nargs, value *args) {
+value FiniteElementSpace_layout(vm *v, int nargs, value *args) {
     value out=MORPHO_NIL;
-    objectdiscretization *slf = MORPHO_GETDISCRETIZATION(MORPHO_SELF(args));
+    objectfespace *slf = MORPHO_GETFESPACE(MORPHO_SELF(args));
     if (nargs==1 && MORPHO_ISFIELD(MORPHO_GETARG(args, 0))) {
         objectfield *field = MORPHO_GETFIELD(MORPHO_GETARG(args, 0));
         objectsparse *new;
         
-        if (discretization_layout(field, slf->discretization, &new)) {
+        if (fespace_layout(field, slf->fespace, &new)) {
             out=MORPHO_OBJECT(new);
             morpho_bindobjects(v, 1, &out);
         }
@@ -487,24 +487,24 @@ value FunctionSpace_layout(vm *v, int nargs, value *args) {
     return out;
 }
 
-MORPHO_BEGINCLASS(FunctionSpace)
-MORPHO_METHOD(FUNCTIONSPACE_LAYOUT_METHOD, FunctionSpace_layout, BUILTIN_FLAGSEMPTY)
+MORPHO_BEGINCLASS(FiniteElementSpace)
+MORPHO_METHOD(FINITEELEMENTSPACE_LAYOUT_METHOD, FiniteElementSpace_layout, BUILTIN_FLAGSEMPTY)
 MORPHO_ENDCLASS
 
 /* **********************************************************************
  * Initialization
  * ********************************************************************** */
 
-void discretization_initialize(void) {
-    objectdiscretizationtype=object_addtype(&objectdiscretizationdefn);
+void fespace_initialize(void) {
+    objectfespacetype=object_addtype(&objectfespacedefn);
     
-    builtin_addfunction(FUNCTIONSPACE_CLASSNAME, functionspace_constructor, BUILTIN_FLAGSEMPTY);
+    builtin_addfunction(FINITEELEMENTSPACE_CLASSNAME, fespace_constructor, BUILTIN_FLAGSEMPTY);
     
     objectstring objname = MORPHO_STATICSTRING(OBJECT_CLASSNAME);
     value objclass = builtin_findclass(MORPHO_OBJECT(&objname));
     
-    value functionspaceclass=builtin_addclass(FUNCTIONSPACE_CLASSNAME, MORPHO_GETCLASSDEFINITION(FunctionSpace), objclass);
-    object_setveneerclass(OBJECT_DISCRETIZATION, functionspaceclass);
+    value fespaceclass=builtin_addclass(FINITEELEMENTSPACE_CLASSNAME, MORPHO_GETCLASSDEFINITION(FiniteElementSpace), objclass);
+    object_setveneerclass(OBJECT_FESPACE, fespaceclass);
     
     morpho_defineerror(FNSPC_ARGS, ERROR_HALT, FNSPC_ARGS_MSG);
     morpho_defineerror(FNSPC_NOTFOUND, ERROR_HALT, FNSPC_NOTFOUND_MSG);

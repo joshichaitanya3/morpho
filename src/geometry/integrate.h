@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include "morpho.h"
 #include "dict.h"
-#include "discretization.h"
+#include "fespace.h"
 
 #define INTEGRATE_RULELABEL "rule"
 #define INTEGRATE_DEGREELABEL "degree"

@@ -1,11 +1,11 @@
-/** @file discretization.h
+/** @file fespace.h
  *  @author T J Atherton
  *
- *  @brief Finite element discretizations
+ *  @brief Finite element fespaces
  */
 
-#ifndef discretization_h
-#define discretization_h
+#ifndef fespace_h
+#define fespace_h
 
 #include "mesh.h"
 #include "field.h"
@@ -21,9 +21,9 @@ typedef void (*interpolationfn) (double *, double *);
 typedef int eldefninstruction;
 
 /** @brief Discretization definitions */
-typedef struct sdiscretization {
-    char *name; /**  Name of the discretization */
-    grade grade; /** Grade of element this discretization is defined on */
+typedef struct sfespace {
+    char *name; /**  Name of the fespace */
+    grade grade; /** Grade of element this fespace is defined on */
     unsigned int *shape; /** Number of degrees of freedom on each grade; must have grade+1 entries */
     int degree; /** Highest degree of polynomial represented by this element */
     int nnodes; /** Number of nodes for this element type */
@@ -32,34 +32,34 @@ typedef struct sdiscretization {
     interpolationfn ifn; /** Interpolation function; receives barycentric coordinates as input and returns weights per node */
     interpolationfn gfn; /** Gradient interpolation function */
     eldefninstruction *eldefn; /** Element definition */
-    struct sdiscretization **lower; /** Discretization to be used for interpolation on lower grades */
-} discretization;
+    struct sfespace **lower; /** Discretization to be used for interpolation on lower grades */
+} fespace;
 
 /* -------------------------------------------------------
  * Discretization object type
  * ------------------------------------------------------- */
 
-extern objecttype objectdiscretizationtype;
-#define OBJECT_DISCRETIZATION objectdiscretizationtype
+extern objecttype objectfespacetype;
+#define OBJECT_FESPACE objectfespacetype
 
 typedef struct {
     object obj;
-    discretization *discretization;
-} objectdiscretization;
+    fespace *fespace;
+} objectfespace;
 
-/** Tests whether an object is a discretization */
-#define MORPHO_ISDISCRETIZATION(val) object_istype(val, OBJECT_DISCRETIZATION)
+/** Tests whether an object is a fespace */
+#define MORPHO_ISFESPACE(val) object_istype(val, OBJECT_FESPACE)
 
-/** Gets the object as a discretization */
-#define MORPHO_GETDISCRETIZATION(val)   ((objectdiscretization *) MORPHO_GETOBJECT(val))
+/** Gets the object as a fespace */
+#define MORPHO_GETFESPACE(val)   ((objectfespace *) MORPHO_GETOBJECT(val))
 
 /* -------------------------------------------------------
  * FunctionSpace veneer class
  * ------------------------------------------------------- */
 
-#define FUNCTIONSPACE_CLASSNAME "FunctionSpace"
+#define FINITEELEMENTSPACE_CLASSNAME "FiniteElementSpace"
 
-#define FUNCTIONSPACE_LAYOUT_METHOD "layout"
+#define FINITEELEMENTSPACE_LAYOUT_METHOD "layout"
 
 /* -------------------------------------------------------
  * Discretization error messages
@@ -75,16 +75,16 @@ typedef struct {
  * Discretization interface
  * ------------------------------------------------------- */
 
-discretization *discretization_find(char *name, grade g);
-discretization *discretization_findlinear(grade g);
+fespace *fespace_find(char *name, grade g);
+fespace *fespace_findlinear(grade g);
 
-bool discretization_doftofieldindx(objectfield *field, discretization *disc, int nv, int *vids, fieldindx *findx);
+bool fespace_doftofieldindx(objectfield *field, fespace *disc, int nv, int *vids, fieldindx *findx);
 
-bool discretization_lower(discretization *disc, grade target, discretization **out);
+bool fespace_lower(fespace *disc, grade target, fespace **out);
 
-bool discretization_layout(objectfield *field, discretization *disc, objectsparse **out);
-void discretization_gradient(discretization *disc, double *lambda, objectmatrix *grad);
+bool fespace_layout(objectfield *field, fespace *disc, objectsparse **out);
+void fespace_gradient(fespace *disc, double *lambda, objectmatrix *grad);
 
-void discretization_initialize(void);
+void fespace_initialize(void);
 
 #endif

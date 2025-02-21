@@ -653,11 +653,11 @@ class MeshAdaptiveRefiner {
     var prototype = field.enumerate(0)
     if (isobject(prototype)) prototype=prototype.clone()
     var shape = field.shape()
-    var fnspace = field.functionspace() 
+    var fespace = field.finiteelementspace() 
     var result
 
     if (self.refinemap && prototype) {
-      result = Field(self.new, prototype, grade=shape, functionspace=fnspace)
+      result = Field(self.new, prototype, grade=shape, finiteelementspace=fespace)
 
       for (g in 0...shape.count()) {
         if (shape[g]==0) continue

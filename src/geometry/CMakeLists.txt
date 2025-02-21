@@ -1,6 +1,6 @@
 target_sources(morpho
     PRIVATE
-        discretization.c    discretization.h
+        fespace.c           fespace.h
         field.c             field.h
         functional.c        functional.h
         geometry.c          geometry.h
@@ -14,7 +14,7 @@ target_sources(morpho
     FILE_SET public_headers
     TYPE HEADERS
     FILES
-        discretization.h
+        fespace.h
         field.h
         functional.h
         geometry.h

@@ -108,9 +108,9 @@ unsigned int field_size(objectmesh *mesh, value prototype, unsigned int ngrades,
 objectfield *object_newfield(objectmesh *mesh, value prototype, value fnspc, unsigned int *shape) {
     int ngrades=mesh_maxgrade(mesh)+1;
 
-    unsigned int dof[ngrades]; // Extract shape from discretization or the provided function space
-    if (MORPHO_ISDISCRETIZATION(fnspc)) {
-        discretization *disc = MORPHO_GETDISCRETIZATION(fnspc)->discretization;
+    unsigned int dof[ngrades]; // Extract shape from fespace or the provided function space
+    if (MORPHO_ISFESPACE(fnspc)) {
+        fespace *disc = MORPHO_GETFESPACE(fnspc)->fespace;
         for (int i=0; i<=disc->grade; i++) dof[i]=disc->shape[i];
         for (int i=disc->grade+1; i<ngrades; i++) dof[i]=0;
     } else if (shape) {
@@ -136,7 +136,7 @@ objectfield *object_newfield(objectmesh *mesh, value prototype, value fnspc, uns
         new->psize=field_sizeprototype(prototype);
         new->nelements=size/new->psize;
         new->ngrades=ngrades;
-        new->fnspc=(MORPHO_ISDISCRETIZATION(fnspc) ? fnspc : MORPHO_NIL);
+        new->fnspc=(MORPHO_ISFESPACE(fnspc) ? fnspc : MORPHO_NIL);
 
         new->offset=noffset;
         memcpy(noffset, offset, sizeof(unsigned int)*(ngrades+1));
@@ -197,8 +197,8 @@ bool field_applyfunctiontovertices(vm *v, objectmesh *mesh, value fn, objectfiel
 
 /** Applies an initialization function to every DOF in an element */
 bool field_applyfunctiontoelements(vm *v, objectmesh *mesh, value fn, value fnspc, objectfield *field) {
-    if (!MORPHO_ISDISCRETIZATION(fnspc)) return false;
-    discretization *disc = MORPHO_GETDISCRETIZATION(fnspc)->discretization;
+    if (!MORPHO_ISFESPACE(fnspc)) return false;
+    fespace *disc = MORPHO_GETFESPACE(fnspc)->fespace;
 
     objectsparse *conn = mesh_getconnectivityelement(mesh, 0, disc->grade);
     if (!conn) return false;
@@ -212,7 +212,7 @@ bool field_applyfunctiontoelements(vm *v, objectmesh *mesh, value fn, value fnsp
         for (int i=0; i<nv; i++) mesh_getvertexcoordinatesaslist(mesh, vids[i], &x[i]);
 
         fieldindx findx[disc->nnodes];
-        if (!discretization_doftofieldindx(field, disc, nv, vids, findx)) return false;
+        if (!fespace_doftofieldindx(field, disc, nv, vids, findx)) return false;
 
         for (int i=0; i<disc->nnodes; i++) { // Loop over nodes
             int indx;
@@ -273,7 +273,7 @@ objectfield *field_newwithfunction(vm *v, objectmesh *mesh, value fn, value fnsp
     new=object_newfield(mesh, ret, fnspc, NULL);
 
     if (new) {
-        if (MORPHO_ISDISCRETIZATION(fnspc)) {
+        if (MORPHO_ISFESPACE(fnspc)) {
             if (!field_applyfunctiontoelements(v, mesh, fn, fnspc, new)) goto field_newwithfunction_cleanup;
         } else {
             if (!field_applyfunctiontovertices(v, mesh, fn, new)) goto field_newwithfunction_cleanup;
@@ -570,7 +570,7 @@ value field_constructor(vm *v, int nargs, value *args) {
     for (unsigned int i=0; i<ngrades; i++) dof[i]=0;
 
     /* Process optional arguments */
-    if (MORPHO_ISDISCRETIZATION(fnspc)) {
+    if (MORPHO_ISFESPACE(fnspc)) {
         
     } else if (MORPHO_ISINTEGER(grd)) {
         dof[MORPHO_GETINTEGERVALUE(grd)]=1;
@@ -976,7 +976,7 @@ MORPHO_METHOD(FIELD_OP_METHOD, Field_op, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(MORPHO_PRINT_METHOD, Field_print, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(MORPHO_CLONE_METHOD, Field_clone, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD_SHAPE_METHOD, Field_shape, BUILTIN_FLAGSEMPTY),
-MORPHO_METHOD(FIELD_FNSPACE_METHOD, Field_fnspace, BUILTIN_FLAGSEMPTY),
+MORPHO_METHOD(FIELD_FESPACE_METHOD, Field_fnspace, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD_PROTOTYPE_METHOD, Field_prototype, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD_MESH_METHOD, Field_mesh, BUILTIN_FLAGSEMPTY),
 MORPHO_METHOD(FIELD_LINEARIZE_METHOD, Field_linearize, BUILTIN_FLAGSEMPTY),
@@ -991,7 +991,7 @@ void field_initialize(void) {
     objectfieldtype=object_addtype(&objectfielddefn);
     
     field_gradeoption=builtin_internsymbolascstring(FIELD_GRADEOPTION);
-    field_functionspaceoption=builtin_internsymbolascstring(FIELD_FUNCTIONSPACEOPTION);
+    field_functionspaceoption=builtin_internsymbolascstring(FIELD_FESPACEOPTION);
     
     builtin_addfunction(FIELD_CLASSNAME, field_constructor, BUILTIN_FLAGSEMPTY);
     

@@ -11,6 +11,6 @@ void geometry_initialize(void) {
     integrate_initialize();
     field_initialize();
     functional_initialize();
-    discretization_initialize();
+    fespace_initialize();
     selection_initialize();
 }
