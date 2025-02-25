@@ -8,6 +8,7 @@
 #ifdef MORPHO_INCLUDE_GEOMETRY
 
 #include <float.h>
+#include <math.h>
 
 #include "functional.h"
 #include "morpho.h"
@@ -18,8 +19,7 @@
 
 #include "matrix.h"
 #include "sparse.h"
-#include "integrate.h"
-#include <math.h>
+#include "geometry.h"
 
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
@@ -424,7 +424,7 @@ bool functional_mapfieldgradientX(vm *v, functional_mapinfo *info, value *out) {
 
     /* Create the output field */
     if (n>0) {
-        grad=object_newfield(mesh, field->prototype, field->dof);
+        grad=object_newfield(mesh, field->prototype, field->fnspc, field->dof);
         if (!grad) { morpho_runtimeerror(v, ERROR_ALLOCATIONFAILED); return false; }
         field_zero(grad);
     }
@@ -651,7 +651,7 @@ bool functional_mapnumericalfieldgradientX(vm *v, functional_mapinfo *info, valu
     objectsparse *conn=mesh_getconnectivityelement(mesh, 0, grd); // Connectivity for the element
 
     /* Create the output field */
-    objectfield *grad=object_newfield(mesh, field->prototype, field->dof);
+    objectfield *grad=object_newfield(mesh, field->prototype, field->fnspc, field->dof);
     if (!grad) return false;
 
     field_zero(grad);
@@ -1255,7 +1255,7 @@ bool functional_mapfieldgradient(vm *v, functional_mapinfo *info, value *out) {
     /* Create output fields */
     for (int i=0; i<ntask; i++) {
         // Create one per thread
-        new[i]=object_newfield(info->mesh, info->field->prototype, info->field->dof);
+        new[i]=object_newfield(info->mesh, info->field->prototype, info->field->fnspc, info->field->dof);
         if (!new[i]) { morpho_runtimeerror(v, ERROR_ALLOCATIONFAILED); goto functional_mapfieldgradient_cleanup; }
         field_zero(new[i]);
         
@@ -1294,7 +1294,8 @@ bool functional_numericalfieldgrad(vm *v, objectmesh *mesh, elementid eid, objec
     
     /* Loop over dofs in field entry */
     for (int j=0; j<field->psize*field->dof[g]; j++) {
-        int k=field->offset[g]+i*field->psize*field->dof[g]+j;
+        int k=(field->offset[g]+i)*field->psize*field->dof[g]+j;
+        
         double f0=field->data.elements[k];
         
         eps=functional_fdstepsize(f0, 1);
@@ -1316,18 +1317,28 @@ bool functional_numericalfieldgrad(vm *v, objectmesh *mesh, elementid eid, objec
 typedef struct {
     objectfield *field;
     functional_integrand *integrand;
+    fespace *disc;
     void *ref;
 } functional_numericalfieldgradientref;
 
 /** Computes the gradient of element id with respect to its constituent vertices and any dependencies */
 bool functional_numericalfieldgradientmapfn(vm *v, objectmesh *mesh, elementid id, int nv, int *vid, void *ref, void *out) {
     functional_numericalfieldgradientref *tref=(functional_numericalfieldgradientref *) ref;
-    grade g=0;
     
-    /* Temporary code: Should establish dependencies from the discretization
-       For now, we simply loop over the vertices */
-    for (elementid k=0; k<nv; k++) {
-        if (!functional_numericalfieldgrad(v, mesh, id, tref->field, g, vid[k], nv, vid, tref->integrand, tref->ref, out)) return false;
+    if (tref->disc) {
+        int nnodes=tref->disc->nnodes;
+        fieldindx findx[nnodes];
+        
+        if (fespace_doftofieldindx(tref->field, tref->disc, nv, vid, findx)) {
+            for (int k=0; k<nnodes; k++) {
+                if (!functional_numericalfieldgrad(v, mesh, id, tref->field, findx[k].g, findx[k].id, nv, vid, tref->integrand, tref->ref, out)) return false;
+            }
+        }
+        
+    } else {
+        for (elementid k=0; k<nv; k++) {
+            if (!functional_numericalfieldgrad(v, mesh, id, tref->field, MESH_GRADE_VERTEX, vid[k], nv, vid, tref->integrand, tref->ref, out)) return false;
+        }
     }
     
     return true;
@@ -1337,7 +1348,8 @@ bool functional_numericalfieldgradientmapfn(vm *v, objectmesh *mesh, elementid i
 bool functional_mapnumericalfieldgradient(vm *v, functional_mapinfo *info, value *out) {
     int success=false;
     int ntask=morpho_threadnumber();
-    if (!ntask) return functional_mapnumericalfieldgradientX(v, info, out);
+    //if (!ntask) return functional_mapnumericalfieldgradientX(v, info, out);
+    if (ntask<1) ntask=1;
     functional_task task[ntask];
     
     varray_elementid imageids;
@@ -1354,7 +1366,7 @@ bool functional_mapnumericalfieldgradient(vm *v, functional_mapinfo *info, value
     
     for (int i=0; i<ntask; i++) {
         // Create one output field per thread
-        new[i] = object_newfield(info->mesh, info->field->prototype, info->field->dof);
+        new[i]=object_newfield(info->mesh, info->field->prototype, info->field->fnspc, info->field->dof);
         if (!new[i]) { morpho_runtimeerror(v, ERROR_ALLOCATIONFAILED); goto functional_mapfieldgradient_cleanup; }
         field_zero(new[i]);
         
@@ -1366,6 +1378,13 @@ bool functional_mapnumericalfieldgradient(vm *v, functional_mapinfo *info, value
         } else UNREACHABLE("Functional calls numericalfieldgradient but doesn't provide cloneref");
         tref[i].integrand=info->integrand;
         tref[i].field=fieldclones[i];
+        tref[i].disc=NULL;
+        if (MORPHO_ISFESPACE(tref[i].field->fnspc)) {
+            tref[i].disc=MORPHO_GETFESPACE(tref[i].field->fnspc)->fespace;
+            if (info->g<tref[i].disc->grade) {
+                if (!fespace_lower(tref[i].disc, info->g, &tref[i].disc)) return false;
+            }
+        }
         
         task[i].ref=(void *) &tref[i]; // Use this to pass the info structure
         task[i].mapfn=functional_numericalfieldgradientmapfn;
@@ -3888,6 +3907,7 @@ MORPHO_ENDCLASS
 
 typedef struct {
     value integrand;
+    
     int nfields;
     value *fields;
     value *originalfields; // Original fields
@@ -3908,15 +3928,26 @@ typedef struct {
 typedef struct {
     object obj;
     objectmesh *mesh;    // The current mesh object
+    
+    integralref *iref;   // The current integral ref structure
+    
+// Information about the element
     grade g;             // Current grade
     elementid id;        // Current element
     int nv;              // Number of vertices
     int *vid;            // Vertex ids
     double **vertexposn; // List of vertex positions
     double elementsize;  // Size of the element
-    value *qinterpolated; // List of interpolated quantities (this allows us to identify operators on fields)
+    
+// Interpolated quantities:
+    double *lambda;      // Barycentric coordinates
+    double *posn;        // Position in physical space
+    
+    quantity *quantities; // Original quantities obtained for the element
+    objectmatrix *invj;   // Inverse jacobian for the element
+    
     value *qgrad;        // Gradients
-    integralref *iref;
+    value *qinterpolated; // List of interpolated quantities (this allows us to identify operators on fields
 } objectintegralelementref;
 
 size_t objectintegralelementref_sizefn(object *obj) {
@@ -4039,16 +4070,128 @@ static value integral_normal(vm *v, int nargs, value *args) {
  * Gradient
  * -------- */
 
-void integral_evaluategradient(vm *v, value q, value *out) {
+bool integrator_sumquantityweighted(int n, double *wts, value *q, value *out);
+
+/** @brief Prepares an inverse jacobian matrix.
+    @param[in] dim - dimension of physical space
+    @param[in] g - grade of the object
+    @param[in] x - list of vertex positions (grade+1 entries, each of length dim)
+    @param[out] invj - inverse jacobian for the transformation (dim*g entries) */
+bool integral_prepareinvjacobian(unsigned int dim, grade g, double **x, objectmatrix *invj) {
+    bool success=false;
+    
+    // Construct the (dim x g) matrix of edge vectors
+    double s[dim*g];
+    for (int i=0; i<g; i++) functional_vecsub(dim, x[i+1], x[0], s + i*dim);
+    
+    if (g==dim) {
+        objectmatrix smat = MORPHO_STATICMATRIX(s, dim, dim);
+        success=(matrix_inverse(&smat, invj)==MATRIX_OK);
+    } else if (g==1) {
+        double s01norm = functional_vecdot(dim, s, s);
+        if (s01norm>0) {
+            functional_vecscale(dim, 1.0/s01norm, s, invj->elements);
+            success=true;
+        }
+    } else if (g==2 && dim==3) {
+        double *s0 = s, *s1 = s+dim, s0xs1[dim], u[dim], v[dim*g];
+        functional_veccross(s0, s1, s0xs1);
+        double s0xs1norm = functional_vecnorm(dim, s0xs1);
+        if (s0xs1norm>0) {
+            double invs0xs1norm = 1/(s0xs1norm*s0xs1norm);
+            functional_veccross(s1, s0xs1, u);
+            functional_vecscale(dim, invs0xs1norm, u, v);
+            functional_veccross(s0xs1, s0, u);
+            functional_vecscale(dim, invs0xs1norm, u, v+dim);
+            
+            objectmatrix invjt = MORPHO_STATICMATRIX(v, dim, g);
+            
+            matrix_transpose(&invjt, invj);
+            
+            success=true;
+        }
+    }
+    return success;
+}
+
+/** Allocate suitable storage for the gradient */
+bool integral_gradalloc(int dim, value prototype, value *out) {
+    if (MORPHO_ISNIL(prototype)) { // Scalar
+        objectmatrix *mgrad=object_newmatrix(dim, 1, false);
+        if (mgrad) *out = MORPHO_OBJECT(mgrad);
+        return mgrad;
+    } else if (MORPHO_ISMATRIX(prototype)) {
+        objectlist *mlst = object_newlist(0, NULL);
+        if (mlst) *out = MORPHO_OBJECT(mlst);
+        return mlst;
+    } else UNREACHABLE("Field type not supported in grad");
+    return false;
+}
+
+/** Prepares the gradient sum to hold the component of the gradient */
+bool integral_gradsuminit(int i, value prototype, value dest, value *sum) {
+    if (MORPHO_ISLIST(dest)) {
+        objectlist *lst = MORPHO_GETLIST(dest);
+        
+        if (i>=list_length(lst)) {
+            objectmatrix *prmat = MORPHO_GETMATRIX(prototype);
+            objectmatrix *new = object_newmatrix(prmat->nrows, prmat->ncols, true);
+            if (!new) return false;
+            *sum = MORPHO_OBJECT(new);
+            list_append(lst, *sum);
+        } else {
+            matrix_zero(MORPHO_GETMATRIX(lst->val.data[i]));
+            *sum = lst->val.data[i];
+        }
+    }
+    return true;
+}
+ 
+/** Copies the component of the gradient into the relevant destination if needed */
+bool integral_gradsumcopy(int i, value sum, value dest) {
+    if (MORPHO_ISMATRIX(dest)) {
+        return morpho_valuetofloat(sum, &MORPHO_GETMATRIX(dest)->elements[i]);
+    } else return true;
+}
+
+/** Copies the component of the gradient into the relevant destination */
+bool integral_oldgradcopy(int dim, int ndof, double *grad, value prototype, value dest) {
+    bool success=false;
+    if (MORPHO_ISMATRIX(dest)) {
+        objectmatrix *mdest = MORPHO_GETMATRIX(dest);
+        memcpy(mdest->elements, grad, sizeof(double)*dim);
+        success=true;
+    } else if (MORPHO_ISLIST(dest)) {
+        objectlist *lst = MORPHO_GETLIST(dest);
+        objectmatrix *proto = MORPHO_GETMATRIX(prototype);
+        for (int i=0; i<dim; i++) {
+            objectmatrix *mgrad=NULL;
+            value el;
+            
+            if (i>=list_length(lst)) {
+                mgrad=object_newmatrix(proto->nrows, proto->ncols, false); // Should copy prototype dimensions!
+                if (mgrad) {
+                    for (int k=0; k<ndof; k++) mgrad->elements[k]=grad[k*dim+i];
+                    list_append(lst, MORPHO_OBJECT(mgrad));
+                    success=true;
+                }
+            }
+        }
+    }
+    return success;
+}
+
+/** Evaluates the gradient of a field */
+bool integral_evaluategradient(vm *v, value q, value *out) {
     objectintegralelementref *elref = integral_getelementref(v);
-    if (!elref) { morpho_runtimeerror(v, INTEGRAL_SPCLFN, GRAD_FUNCTION); return; }
+    if (!elref) { morpho_runtimeerror(v, INTEGRAL_SPCLFN, GRAD_FUNCTION); return false; }
     
     /* Identify the field being referred to */
     int ifld, xfld=-1;
     for (ifld=0; ifld<elref->iref->nfields; ifld++) {
         if (MORPHO_ISFIELD(q) && MORPHO_ISSAME(elref->iref->originalfields[ifld], q)) break;
         else if (MORPHO_ISSAME(elref->qinterpolated[ifld], q)) {
-            if (xfld>=0) { morpho_runtimeerror(v, INTEGRAL_AMBGSFLD); return; }
+            if (xfld>=0) { morpho_runtimeerror(v, INTEGRAL_AMBGSFLD); return false; }
             // @warning: This will fail if two fields happen to have the same value(!)
             xfld=ifld;
         }
@@ -4057,65 +4200,81 @@ void integral_evaluategradient(vm *v, value q, value *out) {
     
     // Raise an error if we couldn't find it
     if (ifld>=elref->iref->nfields) {
-        morpho_runtimeerror(v, INTEGRAL_FLD); return;
+        morpho_runtimeerror(v, INTEGRAL_FLD); return false;
     }
     
-    *out = elref->qgrad[ifld];
-    if (!MORPHO_ISNIL(*out)) return;
-    
+    // Extract information from the field
     objectfield *fld = MORPHO_GETFIELD(elref->iref->fields[ifld]);
-    
-    // Evaluate the gradient
     int dim = elref->mesh->dim;
-    int ndof = fld->psize; // Number of degrees of freedom per element
-    double grad[ndof*dim]; // Storage for gradient
-    value gradx[dim]; // Components of the gradient
-    for (int i=0; i<dim; i++) gradx[i]=MORPHO_NIL;
     
-    bool gsucc = false;
-    
-    // Evaluate correct gradient
-    if (elref->g==2) gsucc=gradsq_evaluategradient(elref->mesh, fld, elref->nv, elref->vid, grad);
-    else if (elref->g==3) gsucc=gradsq_evaluategradient3d(elref->mesh, fld, elref->nv, elref->vid, grad);
-    
-    if (!gsucc) {
-        UNREACHABLE("Couldn't evaluate gradient");
-        return;
-    }
-
-    // Copy into a list or matrix as appropriate
-    if (ndof==1) {
-        objectmatrix *mgrad=object_newmatrix(dim, 1, false);
-        if (!mgrad) { morpho_runtimeerror(v, ERROR_ALLOCATIONFAILED); return; }
-        memcpy(mgrad->elements, grad, sizeof(grad));
-        *out = MORPHO_OBJECT(mgrad);
-        // Don't bind these; this will be freed by the integrand caller
-    } else {
-        if (!MORPHO_ISMATRIX(fld->prototype)) UNREACHABLE("Field type not supported in grad");
-        objectmatrix *proto = MORPHO_GETMATRIX(fld->prototype);
-        for (int i=0; i<dim; i++) {
-            objectmatrix *mgrad=object_newmatrix(proto->nrows, proto->ncols, false); // Should copy prototype dimensions!
-            if (!mgrad) goto integral_evaluategradient_cleanup;
-            for (int k=0; k<ndof; k++) mgrad->elements[k]=grad[k*dim+i];
-            gradx[i]=MORPHO_OBJECT(mgrad);
+    // Allocate objects if need be. Don't bind these; these will be freed when the elref is cleared.
+    if (!MORPHO_ISOBJECT(elref->qgrad[ifld])) {
+        if (!integral_gradalloc(dim, fld->prototype, &elref->qgrad[ifld])) {
+            morpho_runtimeerror(v, ERROR_ALLOCATIONFAILED); return false;
         }
-        objectlist *glst = object_newlist(dim, gradx);
-        if (!glst) goto integral_evaluategradient_cleanup;
-        *out = MORPHO_OBJECT(glst);
-        // Don't bind these; they will be freed by the integrand caller
+    }
+    
+    bool success=false;
+    
+    // Evaluate gradient
+    if (MORPHO_ISFESPACE(fld->fnspc)) {
+        if (!elref->invj) {
+            elref->invj=object_newmatrix(elref->g, elref->mesh->dim, false);
+            
+            if (elref->invj) {
+                integral_prepareinvjacobian(elref->mesh->dim, elref->g, elref->vertexposn, elref->invj);
+            } else {
+                morpho_runtimeerror(v, INTEGRAL_GRDEVL);
+                return false;
+            }
+        }
+        
+        int nnodes = MORPHO_GETFESPACE(fld->fnspc)->fespace->nnodes;
+        double gdata[nnodes * elref->g];
+        objectmatrix gmat = MORPHO_STATICMATRIX(gdata, nnodes, elref->g);
+        
+        // Compute gradient in reference frame
+        fespace_gradient(MORPHO_GETFESPACE(fld->fnspc)->fespace,
+                                elref->lambda, &gmat);
+        
+        // Compute matrix
+        double fmatdata[nnodes * dim];
+        objectmatrix fmat = MORPHO_STATICMATRIX(fmatdata, nnodes, dim);
+        
+        if (matrix_mul(&gmat, elref->invj, &fmat)!=MATRIX_OK) {
+            morpho_runtimeerror(v, INTEGRAL_GRDEVL);
+            return false;
+        }
+        
+        for (int i=0; i<dim; i++) {
+            value sum;
+            
+            if (integral_gradsuminit(i, fld->prototype, elref->qgrad[ifld], &sum) &&
+                integrator_sumquantityweighted(nnodes, fmat.elements+i*nnodes, elref->quantities[ifld].vals, &sum)) {
+                integral_gradsumcopy(i, sum, elref->qgrad[ifld]);
+            } else {
+                morpho_runtimeerror(v, INTEGRAL_GRDEVL);
+                return false;
+            }
+        }
+        
+        success=true;
+    } else { // Old gradient calculation
+        int ndof = fld->psize; // Number of degrees of freedom per element
+        double grad[ndof*dim]; // Storage for gradient
+        
+        // Evaluate correct gradient
+        if (elref->g==2) success=gradsq_evaluategradient(elref->mesh, fld, elref->nv, elref->vid, grad);
+        else if (elref->g==3) success=gradsq_evaluategradient3d(elref->mesh, fld, elref->nv, elref->vid, grad);
+        
+        integral_oldgradcopy(dim, ndof, grad, fld->prototype, elref->qgrad[ifld]);
+        success=true;
     }
     
     // Store for further use
-    elref->qgrad[ifld]=*out;
+    if (success) *out=elref->qgrad[ifld];
     
-    return;
-
-integral_evaluategradient_cleanup:
-    
-    for (int i=0; i<dim; i++) if (MORPHO_ISOBJECT(gradx[i]))
-    morpho_runtimeerror(v, ERROR_ALLOCATIONFAILED);
-    
-    return;
+    return success;
 }
 
 static value integral_gradfn(vm *v, int nargs, value *args) {
@@ -4201,7 +4360,7 @@ void integral_freetlvars(vm *v) {
 }
 
 /* ----------------------------------------------
- * LineIntegral
+ * Generic integral support functions
  * ---------------------------------------------- */
 
 value functional_methodproperty;
@@ -4282,24 +4441,83 @@ void integral_freeref(void *ref) {
     MORPHO_FREE(ref);
 }
 
+/** Clears any data in an element ref */
+void integral_clearelref(objectintegralelementref *elref) {
+    if (elref->invj) object_free((object *) elref->invj);
+}
+
+/** Prepares quantity list */
+bool integral_preparequantities(integralref *iref, int nv, int *vid, quantity *quantities) {
+    bool success=false;
+    for (int k=0; k<iref->nfields; k++) {
+        objectfield *f=MORPHO_GETFIELD(iref->fields[k]);
+        
+        if (MORPHO_ISFESPACE(f->fnspc)) {
+            fespace *disc=MORPHO_GETFESPACE(f->fnspc)->fespace;
+            if (nv-1<disc->grade) {
+                if (!fespace_lower(disc, nv-1, &disc)) return false;
+            }
+            
+            quantities[k].nnodes=disc->nnodes;
+            quantities[k].ifn=disc->ifn;
+            
+            fieldindx findx[disc->nnodes];
+            fespace_doftofieldindx(f, disc, nv, vid, findx);
+            
+            quantities[k].vals=MORPHO_MALLOC(sizeof(value)*disc->nnodes);
+            for (int i=0; i<disc->nnodes; i++) {
+                int dof;
+                field_getindex(f, findx[i].g, findx[i].id, findx[i].indx, &dof);
+                field_getelementwithindex(f, dof, &quantities[k].vals[i]);
+            }
+            success=true;
+        } else {
+            quantities[k].nnodes=nv;
+            quantities[k].ifn=NULL;
+            quantities[k].vals=MORPHO_MALLOC(sizeof(value)*nv);
+            for (unsigned int i=0; i<nv; i++) {
+                field_getelement(f, MESH_GRADE_VERTEX, vid[i], 0, &quantities[k].vals[i]);
+            }
+            success=true; 
+        }
+    }
+    return success;
+}
+
+/** Clears a list of quantities */
+void integral_clearquantities(int nq, quantity *quantities) {
+    for (int k=0; k<nq; k++) {
+        if (quantities[k].vals) MORPHO_FREE(quantities[k].vals);
+    }
+}
+
 bool integral_integrandfn(unsigned int dim, double *t, double *x, unsigned int nquantity, value *quantity, void *ref, double *fout) {
     integralref *iref = ref;
     objectmatrix posn = MORPHO_STATICMATRIX(x, dim, 1);
     value args[nquantity+1], out;
 
+    // The integrand function is called with the position and then interpolated quantities.
     args[0]=MORPHO_OBJECT(&posn);
     for (unsigned int i=0; i<nquantity; i++) args[i+1]=quantity[i];
     
     objectintegralelementref *elref = integral_getelementref(iref->v);
-    if (elref) elref->qinterpolated=quantity;
+    if (elref) {
+        elref->lambda=t;
+        elref->posn=x;
+        elref->qinterpolated=quantity;
+    }
     
     if (morpho_call(iref->v, iref->integrand, nquantity+1, args, &out)) {
-        morpho_valuetofloat(out,fout);
+        morpho_valuetofloat(out, fout);
         return true;
     }
 
     return false;
 }
+
+/* ----------------------------------------------
+ * LineIntegral
+ * ---------------------------------------------- */
 
 /** Integrate a function over a line */
 bool lineintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *vid, void *ref, double *out) {
@@ -4313,6 +4531,7 @@ bool lineintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *
     elref.iref = &iref;
     elref.vertexposn = x;
     elref.qgrad=qgrad;
+    elref.invj=NULL;
     
     if (!functional_elementsize(v, mesh, MESH_GRADE_LINE, id, nv, vid, &elref.elementsize)) return false;
 
@@ -4325,18 +4544,25 @@ bool lineintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *
     integral_cleartlvars(v);
     vm_settlvar(v, elementhandle, MORPHO_OBJECT(&elref));
 
-    value q0[iref.nfields+1], q1[iref.nfields+1];
-    value *q[2] = { q0, q1 };
-    for (unsigned int k=0; k<iref.nfields; k++) {
-        for (unsigned int i=0; i<nv; i++) {
-            field_getelement(MORPHO_GETFIELD(iref.fields[k]), MESH_GRADE_VERTEX, vid[i], 0, &q[i][k]);
-        }
-    }
-
     if (MORPHO_ISDICTIONARY(iref.method)) {
         double err;
-        success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), mesh->dim, MESH_GRADE_LINE, x, iref.nfields, q, &iref, out, &err);
-    } else {
+        quantity quantities[iref.nfields+1];
+        integral_preparequantities(&iref, nv, vid, quantities);
+        elref.quantities=quantities;
+        
+        success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), morpho_geterror(v), mesh->dim, MESH_GRADE_LINE, x, iref.nfields, quantities, &iref, out, &err);
+        
+        integral_clearquantities(iref.nfields, quantities);
+        integral_clearelref(&elref);
+    } else { // Old integrator
+        value q0[iref.nfields+1], q1[iref.nfields+1];
+        value *q[2] = { q0, q1 };
+        for (unsigned int k=0; k<iref.nfields; k++) {
+            for (unsigned int i=0; i<nv; i++) {
+                field_getelement(MORPHO_GETFIELD(iref.fields[k]), MESH_GRADE_VERTEX, vid[i], 0, &q[i][k]);
+            }
+        }
+        
         success=integrate_integrate(integral_integrandfn, mesh->dim, MESH_GRADE_LINE, x, iref.nfields, q, &iref, out);
     }
     
@@ -4368,11 +4594,16 @@ value LineIntegral_init(vm *v, int nargs, value *args) {
                         functional_methodproperty, &method,
                         linearelasticity_referenceproperty, &mref,
                         linearelasticity_weightbyreferenceproperty, &wtbyref)) {
-        if (MORPHO_ISDICTIONARY(method)) objectinstance_setproperty(self, functional_methodproperty, method);
+        if (MORPHO_ISDICTIONARY(method)) {
+            objectinstance_setproperty(self, functional_methodproperty, method);
+        } else if (!MORPHO_ISNIL(method)) {
+            morpho_runtimeerror(v, INTEGRAL_MTHDDCT);
+        }
+
         if (MORPHO_ISMESH(mref)) objectinstance_setproperty(self, linearelasticity_referenceproperty, mref);
         if (MORPHO_ISBOOL(wtbyref)) objectinstance_setproperty(self, linearelasticity_weightbyreferenceproperty, wtbyref);
     } else {
-        morpho_runtimeerror(v, LINEINTEGRAL_ARGS);
+        morpho_runtimeerror(v, INTEGRAL_ARGS);
         return MORPHO_NIL;
     }
     
@@ -4382,13 +4613,13 @@ value LineIntegral_init(vm *v, int nargs, value *args) {
         if (morpho_countparameters(f, &nparams)) {
             objectinstance_setproperty(self, scalarpotential_functionproperty, MORPHO_GETARG(args, 0));
         } else {
-            morpho_runtimeerror(v, LINEINTEGRAL_ARGS);
+            morpho_runtimeerror(v, INTEGRAL_ARGS);
             return MORPHO_NIL;
         }
     }
 
     if (nparams!=nfixed) {
-        morpho_runtimeerror(v, LINEINTEGRAL_NFLDS);
+        morpho_runtimeerror(v, INTEGRAL_NFLDS);
         return MORPHO_NIL;
     }
 
@@ -4399,7 +4630,7 @@ value LineIntegral_init(vm *v, int nargs, value *args) {
 
         for (unsigned int i=1; i<nfixed; i++) {
             if (!MORPHO_ISFIELD(MORPHO_GETARG(args, i))) {
-                morpho_runtimeerror(v, LINEINTEGRAL_ARGS);
+                morpho_runtimeerror(v, INTEGRAL_ARGS);
                 object_free((object *) list);
                 return MORPHO_NIL;
             }
@@ -4458,9 +4689,10 @@ bool areaintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *
     
     objectintegralelementref elref = MORPHO_STATICINTEGRALELEMENTREF(mesh, MESH_GRADE_AREA, id, nv, vid);
     elref.iref = &iref;
-    elref.vertexposn = x;
+    elref.vertexposn=x;
     elref.qgrad=qgrad;
-    
+    elref.invj=NULL;  
+  
     if (iref.weightbyref) {
         if (!functional_elementsize(v, iref.mref, MESH_GRADE_AREA, id, nv, vid, &elref.elementsize)) return false;
     } else {
@@ -4471,29 +4703,38 @@ bool areaintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *
     for (unsigned int i=0; i<nv; i++) {
         mesh_getvertexcoordinatesaslist(mesh, vid[i], &x[i]);
     }
-
+    
     /* Set up quantities */
     integral_cleartlvars(v);
     vm_settlvar(v, elementhandle, MORPHO_OBJECT(&elref));
-
-    value q0[iref.nfields+1], q1[iref.nfields+1], q2[iref.nfields+1];
-    value *q[3] = { q0, q1, q2 };
-    for (unsigned int k=0; k<iref.nfields; k++) {
-        for (unsigned int i=0; i<nv; i++) {
-            field_getelement(MORPHO_GETFIELD(iref.fields[k]), MESH_GRADE_VERTEX, vid[i], 0, &q[i][k]);
-        }
-    }
-
+    
     if (MORPHO_ISDICTIONARY(iref.method)) {
         double err;
-        success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), mesh->dim, MESH_GRADE_AREA, x, iref.nfields, q, &iref, out, &err);
+        quantity quantities[iref.nfields+1];
+        integral_preparequantities(&iref, nv, vid, quantities);
+        elref.quantities=quantities;
+        
+        success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), morpho_geterror(v), mesh->dim, MESH_GRADE_AREA, x, iref.nfields, quantities, &iref, out, &err);
+        
+        integral_clearquantities(iref.nfields, quantities);
+        integral_clearelref(&elref);
     } else {
+        value q0[iref.nfields+1], q1[iref.nfields+1], q2[iref.nfields+1];
+        value *q[3] = { q0, q1, q2 };
+        for (unsigned int k=0; k<iref.nfields; k++) {
+            for (unsigned int i=0; i<nv; i++) {
+                field_getelement(MORPHO_GETFIELD(iref.fields[k]), MESH_GRADE_VERTEX, vid[i], 0, &q[i][k]);
+            }
+        }
+        
         success=integrate_integrate(integral_integrandfn, mesh->dim, MESH_GRADE_AREA, x, iref.nfields, q, &iref, out);
     }
     
     if (success) *out *= elref.elementsize;
 
     integral_freetlvars(v);
+    
+    // Free gradient information
     for (int i=0; i<iref.nfields; i++) {
         if (MORPHO_ISLIST(qgrad[i])) {
             objectlist *l = MORPHO_GETLIST(qgrad[i]);
@@ -4557,6 +4798,7 @@ bool volumeintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int
     elref.iref = &iref;
     elref.vertexposn = x;
     elref.qgrad=qgrad;
+    elref.invj=NULL;
 
     if (!functional_elementsize(v, mesh, MESH_GRADE_VOLUME, id, nv, vid, &elref.elementsize)) return false;
 
@@ -4579,7 +4821,13 @@ bool volumeintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int
 
     if (MORPHO_ISDICTIONARY(iref.method)) {
         double err;
-        success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), mesh->dim, MESH_GRADE_VOLUME, x, iref.nfields, q, &iref, out, &err);
+        quantity quantities[iref.nfields+1];
+        integral_preparequantities(&iref, nv, vid, quantities);
+        elref.quantities=quantities;
+        
+        success=integrate(integral_integrandfn, MORPHO_GETDICTIONARY(iref.method), morpho_geterror(v), mesh->dim, MESH_GRADE_VOLUME, x, iref.nfields, quantities, &iref, out, &err);
+        
+        integral_clearquantities(iref.nfields, quantities);
     } else {
         success=integrate_integrate(integral_integrandfn, mesh->dim, MESH_GRADE_VOLUME, x, iref.nfields, q, &iref, out);
     }
@@ -4633,37 +4881,9 @@ MORPHO_METHOD(FUNCTIONAL_GRADIENT_METHOD, VolumeIntegral_gradient, BUILTIN_FLAGS
 MORPHO_METHOD(FUNCTIONAL_FIELDGRADIENT_METHOD, VolumeIntegral_fieldgradient, BUILTIN_FLAGSEMPTY)
 MORPHO_ENDCLASS
 
-
 /* **********************************************************************
  * Initialization
  * ********************************************************************** */
-
-/*double ff(double x) {
-    return exp(x);
-}
-
-double dff(double x) {
-    return exp(x);
-}
-
-void functional_fdtest(void) {
-    double h1 = 1e-8;
-    
-    //double xi[] = { -100, -10, -1.0, 0.0, 1e-7, 1e-5, 1e-2, 0.1, 1, 10, 100, 1e100 };
-    
-    for (int i=-6; i<3; i++) {
-        double x = pow(10.0, (double) i);
-        double fex = dff(x);
-    
-        double f1=(ff(x+h1)-ff(x-h1))/(2*h1);
-        
-        double h2=functional_fdstepsize(x, 1);
-        double f2=(ff(x+h2)-ff(x-h2))/(2*h2);
-        
-        printf("%g: %g %g %g\n", x, fex, fabs((f1-fex)/fex), fabs((f2-fex)/fex));
-    }
-    
-}*/
 
 void functional_initialize(void) {
     fddelta1 = pow(MORPHO_EPS, 1.0/3.0);
@@ -4744,11 +4964,13 @@ void functional_initialize(void) {
 
     morpho_defineerror(FUNCTIONAL_ARGS, ERROR_HALT, FUNCTIONAL_ARGS_MSG);
 
-    morpho_defineerror(LINEINTEGRAL_ARGS, ERROR_HALT, LINEINTEGRAL_ARGS_MSG);
-    morpho_defineerror(LINEINTEGRAL_NFLDS, ERROR_HALT, LINEINTEGRAL_NFLDS_MSG);
+    morpho_defineerror(INTEGRAL_ARGS, ERROR_HALT, INTEGRAL_ARGS_MSG);
+    morpho_defineerror(INTEGRAL_NFLDS, ERROR_HALT, INTEGRAL_NFLDS_MSG);
+    morpho_defineerror(INTEGRAL_MTHDDCT, ERROR_HALT, INTEGRAL_MTHDDCT_MSG);
     morpho_defineerror(INTEGRAL_FLD, ERROR_HALT, INTEGRAL_FLD_MSG);
     morpho_defineerror(INTEGRAL_AMBGSFLD, ERROR_HALT, INTEGRAL_AMBGSFLD_MSG);
     morpho_defineerror(INTEGRAL_SPCLFN, ERROR_HALT, INTEGRAL_SPCLFN_MSG);
+    morpho_defineerror(INTEGRAL_GRDEVL, ERROR_HALT, INTEGRAL_GRDEVL_MSG);
     
     functional_poolinitialized = false;
     

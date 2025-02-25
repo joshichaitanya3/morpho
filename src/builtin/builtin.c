@@ -13,10 +13,7 @@
 #include "classes.h"
 
 #include "sparse.h"
-#include "mesh.h"
-#include "selection.h"
-#include "functional.h"
-#include "field.h"
+#include "geometry.h"
 
 /* **********************************************************************
  * Global data
@@ -440,12 +437,9 @@ void builtin_initialize(void) {
     
 #ifdef MORPHO_INCLUDE_GEOMETRY
     // Initialize geometry
-    mesh_initialize();
-    selection_initialize();
-    field_initialize();
-    functional_initialize();
+    geometry_initialize();
 #endif
-    
+  
     morpho_addfinalizefn(builtin_finalize);
 }
 

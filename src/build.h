@@ -10,7 +10,7 @@
  * Version
  * ********************************************************************** */
 
-#define MORPHO_VERSIONSTRING "0.6.2"
+#define MORPHO_VERSIONSTRING "0.6.2-newdiscretization"
 
 #define MORPHO_VERSION_MAJOR 0
 #define MORPHO_VERSION_MINOR 6
@@ -95,7 +95,7 @@
 #define MORPHO_NAN_BOXING
 #endif
 /** @brief Number of bytes to bind before GC first runs */
-#define MORPHO_GCINITIAL 1024;
+#define MORPHO_GCINITIAL 1024
 /** It seems that DeltaBlue benefits strongly from garbage collecting while the heap is still fairly small */
 
 /** @brief Controls how rapidly the GC tries to collect garbage */

@@ -1,0 +1,24 @@
+// Calculate field gradient for a field with higher grades
+
+import meshtools 
+import "../numericalderivatives.morpho"
+
+var mb=MeshBuilder()
+mb.addvertex([0,0])
+mb.addvertex([1,0])
+mb.addvertex([0,1])
+mb.addface([0,1,2])
+var m = mb.build() 
+m.addgrade(1)
+
+var f = Field(m, fn (x,y) Matrix([x^2,y^2]), finiteelementspace=FiniteElementSpace("CG2", grade=2))
+
+fn elasticity(x, f) {
+    var g = grad(f)
+    return g[0].inner(g[0])+g[1].inner(g[1]) 
+}
+
+var lel = AreaIntegral(elasticity, f, method={})
+
+print (lel.fieldgradient(m, f) - numericalfieldgradient(lel, m, f)).__linearize().norm() < 1e-6
+// expect: true
