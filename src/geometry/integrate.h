@@ -7,6 +7,9 @@
 #ifndef integration_h
 #define integration_h
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include <stdio.h>
 #include "morpho.h"
 #include "dict.h"
@@ -173,6 +176,8 @@ bool integrate_integrate(integrandfunction *integrand, unsigned int dim, unsigne
 bool integrate(integrandfunction *integrand, objectdictionary *method, error *err, unsigned int dim, unsigned int grade, double **x, unsigned int nquantity, quantity *quantity, void *ref, double *out, double *errest);
 
 void integrate_initialize(void);
+
+#endif
 
 #endif /* integration_h */
 

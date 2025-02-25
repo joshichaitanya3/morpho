@@ -4,6 +4,9 @@
  *  @brief Functionals
  */
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include <float.h>
 #include <math.h>
 
@@ -4981,5 +4984,7 @@ void functional_initialize(void) {
 }
 
 void functional_finalize(void) {
-    threadpool_clear(&functional_pool);
+    if (functional_poolinitialized) threadpool_clear(&functional_pool);
 }
+
+#endif

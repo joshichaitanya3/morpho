@@ -4,6 +4,9 @@
  *  @brief Fields
  */
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include "field.h"
 #include "morpho.h"
 #include "classes.h"
@@ -1011,3 +1014,5 @@ void field_initialize(void) {
     morpho_defineerror(FIELD_OPRETURN, ERROR_HALT, FIELD_OPRETURN_MSG);
     morpho_defineerror(FIELD_MESHARG, ERROR_HALT, FIELD_MESHARG_MSG);
 }
+
+#endif

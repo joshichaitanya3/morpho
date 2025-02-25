@@ -7,6 +7,9 @@
 #ifndef matrix_h
 #define matrix_h
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_LINALG
+
 #include <stdio.h>
 #include "classes.h"
 /** Use Apple's Accelerate library for LAPACK and BLAS */
@@ -196,5 +199,7 @@ double matrix_Linfnorm(objectmatrix *a);
 void matrix_print(vm *v, objectmatrix *m);
 
 void matrix_initialize(void);
+
+#endif
 
 #endif /* matrix_h */

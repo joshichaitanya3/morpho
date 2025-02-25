@@ -4,6 +4,9 @@
  *  @brief Numerical integration
 */
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include <limits.h>
 #include <float.h>
 
@@ -2786,3 +2789,5 @@ void integrate_initialize(void) {
     morpho_defineerror(INTEGRATE_RLUNAVLB, ERROR_HALT, INTEGRATE_RLUNAVLB_MSG);
     morpho_defineerror(INTEGRATE_MTHDTYP, ERROR_HALT, INTEGRATE_MTHDTYP_MSG);
 }
+
+#endif

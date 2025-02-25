@@ -7,6 +7,9 @@
 #ifndef field_h
 #define field_h
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include "object.h"
 #include "mesh.h"
 #include "matrix.h"
@@ -118,5 +121,7 @@ bool field_setelement(objectfield *field, grade grade, elementid el, int indx, v
 bool field_setelementwithindex(objectfield *field, int ix, value val);
 
 void field_initialize(void);
+
+#endif
 
 #endif /* field_h */
