@@ -404,9 +404,19 @@ void cg2_3dgrad(double *lambda, double *grad) { // TODO: FIX
     // Gij = d Xi[i] / d lambda[j]
     // Note this is in column-major order!
     double g[] =
-    { 4*lambda[0]-1,             0,             0, 4*lambda[1],           0, 4*lambda[2],
-                  0, 4*lambda[1]-1,             0, 4*lambda[0], 4*lambda[2],           0,
-                  0,             0, 4*lambda[2]-1,           0, 4*lambda[1], 4*lambda[0] };
+    { 4*lambda[0]-1,             0,             0,             0,
+        4*lambda[1],             0,   4*lambda[2],   4*lambda[3],            0,             0,
+        
+                  0, 4*lambda[1]-1,             0,             0,
+        4*lambda[0],   4*lambda[2],             0,             0,  4*lambda[3],             0,
+        
+                  0,             0, 4*lambda[2]-1,             0,
+                  0,   4*lambda[1],   4*lambda[0],             0,            0,   4*lambda[3],
+        
+                  0,             0,             0, 4*lambda[3]-1,
+                  0,             0,             0,   4*lambda[0],  4*lambda[1],   4*lambda[2]
+    };
+    
     memcpy(grad, g, sizeof(g));
 }
 
