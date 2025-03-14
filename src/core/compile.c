@@ -3555,36 +3555,44 @@ static codeinfo compiler_classbody(compiler *c, syntaxtreeindx startindx, regist
     
     syntaxtree_flatten(compiler_getsyntaxtree(c), startindx, 1, seqtype, &entries);
     
+    // Pass through body declaration to ensure all method labels are defined
     for (int i=0; i<entries.count; i++) {
         syntaxtreenode *node=syntaxtree_nodefromindx(compiler_getsyntaxtree(c), entries.data[i]);
         
-        switch (node->type) {
-            case NODE_FUNCTION:
-                {
-                    // Store the current method so that compiler_function can recognize that
-                    // it is in a method definition
-                    c->currentmethod=node;
+        if (node->type==NODE_FUNCTION) {
+            if (!dictionary_get(&klass->methods, node->content, NULL)) {
+                value symbol = program_internsymbol(c->out, node->content);
+                dictionary_insert(&klass->methods, symbol, MORPHO_NIL);
+            }
+        } else UNREACHABLE("Incorrect node type found in class declaration");
+    }
+    
+    // Now compile method definitions
+    for (int i=0; i<entries.count; i++) {
+        syntaxtreenode *node=syntaxtree_nodefromindx(compiler_getsyntaxtree(c), entries.data[i]);
+        
+        if (node->type==NODE_FUNCTION) {
+            // Store the current method so that compiler_function can recognize that
+            // it is in a method definition
+            c->currentmethod=node;
 
-                    // Compile the method declaration
-                    out=compiler_function(c, node, reqout);
-                    ninstructions+=out.ninstructions;
+            // Compile the method declaration
+            out=compiler_function(c, node, reqout);
+            ninstructions+=out.ninstructions;
 
-                    // Insert the compiled function into the method dictionary, making sure the method name is interned
-                    objectfunction *method = compiler_getpreviousfunction(c);
-                    if (method) {
-                        value omethod = MORPHO_OBJECT(method);
-                        value symbol = program_internsymbol(c->out, node->content),
-                              prev=MORPHO_NIL;
-                        
-                        if (dictionary_get(&klass->methods, symbol, &prev)) {
-                            compiler_overridemethod(c, node, method, prev); // Override or create a metafunction
-                        } else dictionary_insert(&klass->methods, symbol, omethod); // Just insert
-                    }
-                }
-                break;
-            default:
-                UNREACHABLE("Incorrect node type found in class declaration");
-                break;
+            // Insert the compiled function into the method dictionary, making sure the method name is interned
+            objectfunction *method = compiler_getpreviousfunction(c);
+            if (method) {
+                value omethod = MORPHO_OBJECT(method);
+                value symbol = program_internsymbol(c->out, node->content),
+                      prev=MORPHO_NIL;
+                
+                dictionary_get(&klass->methods, symbol, &prev);
+                
+                if (MORPHO_ISNIL(prev)) { // Just insert if we don't have any definition
+                    dictionary_insert(&klass->methods, symbol, omethod);
+                } else compiler_overridemethod(c, node, method, prev); // Override or create a metafunction
+            }
         }
     }
     
