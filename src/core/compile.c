@@ -3544,54 +3544,51 @@ void compiler_overridemethod(compiler *c, syntaxtreenode *node, objectfunction *
 }
 
 /** Compiles a list of method declarations. */
-static codeinfo compiler_method(compiler *c, syntaxtreenode *node, registerindx reqout) {
+static codeinfo compiler_classbody(compiler *c, syntaxtreeindx startindx, registerindx reqout) {
     codeinfo out;
     unsigned int ninstructions=0;
     objectclass *klass=compiler_getcurrentclass(c);
 
-    switch (node->type) {
-        case NODE_FUNCTION:
-            {
-                /* Store the current method so that compiler_function can recognize that
-                   it is in a method definition */
-                c->currentmethod=node;
+    syntaxtreenodetype seqtype[] = { NODE_SEQUENCE };
+    varray_syntaxtreeindx entries;
+    varray_syntaxtreeindxinit(&entries);
+    
+    syntaxtree_flatten(compiler_getsyntaxtree(c), startindx, 1, seqtype, &entries);
+    
+    for (int i=0; i<entries.count; i++) {
+        syntaxtreenode *node=syntaxtree_nodefromindx(compiler_getsyntaxtree(c), entries.data[i]);
+        
+        switch (node->type) {
+            case NODE_FUNCTION:
+                {
+                    // Store the current method so that compiler_function can recognize that
+                    // it is in a method definition
+                    c->currentmethod=node;
 
-                /* Compile the method declaration */
-                out=compiler_function(c, node, reqout);
-                ninstructions+=out.ninstructions;
+                    // Compile the method declaration
+                    out=compiler_function(c, node, reqout);
+                    ninstructions+=out.ninstructions;
 
-                /* Insert the compiled function into the method dictionary, making sure the method name is interned */
-                objectfunction *method = compiler_getpreviousfunction(c);
-                if (method) {
-                    value omethod = MORPHO_OBJECT(method);
-                    value symbol = program_internsymbol(c->out, node->content),
-                          prev=MORPHO_NIL;
-                    
-                    if (dictionary_get(&klass->methods, symbol, &prev)) {
-                        compiler_overridemethod(c, node, method, prev); // Override or create a metafunction
-                    } else dictionary_insert(&klass->methods, symbol, omethod); // Just insert
+                    // Insert the compiled function into the method dictionary, making sure the method name is interned
+                    objectfunction *method = compiler_getpreviousfunction(c);
+                    if (method) {
+                        value omethod = MORPHO_OBJECT(method);
+                        value symbol = program_internsymbol(c->out, node->content),
+                              prev=MORPHO_NIL;
+                        
+                        if (dictionary_get(&klass->methods, symbol, &prev)) {
+                            compiler_overridemethod(c, node, method, prev); // Override or create a metafunction
+                        } else dictionary_insert(&klass->methods, symbol, omethod); // Just insert
+                    }
                 }
-            }
-            break;
-        case NODE_SEQUENCE:
-            {
-                syntaxtreenode *child=NULL;
-                if (node->left!=SYNTAXTREE_UNCONNECTED) {
-                    child=compiler_getnode(c, node->left);
-                    out=compiler_method(c, child, reqout);
-                    ninstructions+=out.ninstructions;
-                }
-                if (node->right!=SYNTAXTREE_UNCONNECTED) {
-                    child=compiler_getnode(c, node->right);
-                    out=compiler_method(c, child, reqout);
-                    ninstructions+=out.ninstructions;
-                }
-            }
-            break;
-        default:
-            UNREACHABLE("Incorrect node type found in class declaration");
-            break;
+                break;
+            default:
+                UNREACHABLE("Incorrect node type found in class declaration");
+                break;
+        }
     }
+    
+    varray_syntaxtreeindxclear(&entries);
 
     return CODEINFO(REGISTER, REGISTER_UNALLOCATED, ninstructions);
 }
@@ -3678,10 +3675,9 @@ static codeinfo compiler_class(compiler *c, syntaxtreenode *node, registerindx r
         compiler_error(c, node, COMPILE_CLSSLNRZ, MORPHO_GETCSTRING(klass->name));
     }
 
-    /* Compile method declarations */
+    /* Compile the body */
     if (node->right!=SYNTAXTREE_UNCONNECTED) {
-        syntaxtreenode *child = compiler_getnode(c, node->right);
-        mout=compiler_method(c, child, reqout);
+        mout=compiler_classbody(c, node->right, reqout);
         ninstructions+=mout.ninstructions;
     }
 

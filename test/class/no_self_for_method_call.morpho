@@ -1,0 +1,19 @@
+// Avoid needing self in a method call
+
+class A {
+  foo() {
+    goo()
+  }
+
+  goo() {
+    print "Foo" 
+  }
+}
+
+var a = A() 
+
+a.foo() 
+// expect: Foo
+
+a.goo() 
+// expect: Foo
