@@ -2,11 +2,12 @@
 
 class A {
   foo() {
-    goo()
+    self.goo("Foo")
+    goo("Hoo")
   }
 
-  goo() {
-    print "Foo" 
+  goo(x) {
+    print x
   }
 }
 
@@ -14,6 +15,7 @@ var a = A()
 
 a.foo() 
 // expect: Foo
+// expect: Hoo
 
-a.goo() 
-// expect: Foo
+a.goo("Woo") 
+// expect: Woo

@@ -3284,6 +3284,14 @@ static bool compiler_isinvocation(compiler *c, syntaxtreenode *call) {
         /* Check that the method is a symbol */
         method=compiler_getnode(c, selector->right);
         if (method->type==NODE_SYMBOL) isinvocation=true;
+    } else if (selector->type==NODE_SYMBOL) {
+        objectclass *klass = compiler_getcurrentclass(c);
+        
+        if (klass &&
+            compiler_findsymbol(compiler_currentfunctionstate(c), selector->content)==REGISTER_UNALLOCATED &&
+            dictionary_get(&klass->methods, selector->content, NULL)) {
+            isinvocation=true;
+        }
     }
     return isinvocation;
 }
@@ -3375,57 +3383,80 @@ static codeinfo compiler_call(compiler *c, syntaxtreenode *node, registerindx re
 
 #include <stdint.h>
 
-/** Compiles a method invocation */
+/* Compiles a method invocation:
+        node              |          node
+      /     \             |         /    \
+     DOT     args         |    method     args
+   /    \                 |    (self)
+object   method */
 static codeinfo compiler_invoke(compiler *c, syntaxtreenode *node, registerindx reqout) {
     unsigned int ninstructions=0;
     codeinfo object=CODEINFO_EMPTY;
 
-    /* Get the selector node */
-    syntaxtreenode *selector=compiler_getnode(c, node->left);
-
+    /* Retrieve the selector node */
+    syntaxtreenode *selectornode=compiler_getnode(c, node->left),
+                   *methodnode=NULL,
+                   *objectnode=NULL;
+    
+    if (selectornode->type==NODE_DOT) {
+        objectnode=compiler_getnode(c, selectornode->left);
+        methodnode=compiler_getnode(c, selectornode->right);
+    } else if (selectornode->type==NODE_SYMBOL) {
+        methodnode=selectornode;
+    }
+    
     compiler_beginargs(c);
     
     registerindx rSel = compiler_regalloctop(c);
     registerindx rObj = compiler_regalloctop(c);
-
-    syntaxtreenode *methodnode=compiler_getnode(c, selector->right);
+    
+    // Fetch the method
     codeinfo cSel = CODEINFO(CONSTANT, 0, 0);
     cSel.dest = compiler_addsymbol(c, methodnode, methodnode->content);
     codeinfo method=compiler_movetoregister(c, methodnode, cSel, rSel);
     ninstructions+=method.ninstructions;
 
-    /* Fetch the object. We patch to ensure that builtin classes are prioritized over constructor functions. */
-    syntaxtreenode *objectnode=compiler_getnode(c, selector->left);
-    if (objectnode->type==NODE_SYMBOL) {
-        value klass=builtin_findclass(objectnode->content);
-        if (MORPHO_ISCLASS(klass)) {
-            registerindx kindx = compiler_addconstant(c, objectnode, klass, true, false);
-            object=CODEINFO(CONSTANT, kindx, 0);
+    // Fetch the object
+    if (objectnode) {
+        bool invokeclass=false;
+        // Patch to ensure that builtin classes are prioritized over constructor functions.
+        if (objectnode->type==NODE_SYMBOL) {
+            value klass=builtin_findclass(objectnode->content);
+            if (MORPHO_ISCLASS(klass)) {
+                registerindx kindx = compiler_addconstant(c, objectnode, klass, true, false);
+                object=CODEINFO(CONSTANT, kindx, 0);
+                invokeclass=true;
+            }
         }
-    }
-    
-    // Otherwise just fetch the object normally
-    if (object.returntype==REGISTER && object.dest==REGISTER_UNALLOCATED) { 
-      object=compiler_nodetobytecode(c, selector->left, rObj);
+        
+        // Otherwise just fetch the object normally
+        if (!invokeclass) {
+            object=compiler_nodetobytecode(c, selectornode->left, rObj);
+            ninstructions+=object.ninstructions;
+        }
+        
+        // Ensure register allocations remain correct
+        if (object.returntype==REGISTER && object.dest!=rObj) {
+            compiler_regfreetemp(c, object.dest);
+            compiler_regtempwithindx(c, rObj); // Ensure rObj remains allocated
+        }
+    } else { // If no objectnode, fetch self from r0
+        object=CODEINFO(REGISTER, 0 /* <- r0 */, 0);
     }
 
-    ninstructions+=object.ninstructions;
-    if (object.returntype==REGISTER && object.dest!=rObj) {
-        compiler_regfreetemp(c, object.dest);
-        compiler_regtempwithindx(c, rObj); // Ensure rObj remains allocated
-    }
-    object=compiler_movetoregister(c, selector, object, rObj);
+    // Move the object into place for the invocation
+    object=compiler_movetoregister(c, selectornode, object, rObj);
     ninstructions+=object.ninstructions;
     
-    /* Compile the arguments */
+    // Compile the arguments
     codeinfo args = CODEINFO_EMPTY;
     if (node->right!=SYNTAXTREE_UNCONNECTED) args=compiler_nodetobytecode(c, node->right, REGISTER_UNALLOCATED);
     ninstructions+=args.ninstructions;
 
-    /* Remember the last argument */
+    // Remember the last argument
     registerindx lastarg=compiler_regtop(c);
 
-    /* Check we don't have too many arguments */
+    // Check we don't have too many arguments
     if (lastarg-rSel>MORPHO_MAXARGS) {
         compiler_error(c, node, COMPILE_TOOMANYARGS);
         return CODEINFO_EMPTY;
@@ -3433,17 +3464,17 @@ static codeinfo compiler_invoke(compiler *c, syntaxtreenode *node, registerindx 
 
     compiler_endargs(c);
 
-    /* Generate the call instruction */
+    // Generate the call instruction
     int nposn=0, nopt=0;
     compiler_regcountargs(c, object.dest+1, lastarg, &nposn, &nopt);
     compiler_addinstruction(c, ENCODE(OP_INVOKE, rSel, nposn, nopt), node);
     ninstructions++;
 
-    /* Free all the registers used for the call */
+    // Free all the registers used for the call
     compiler_regfreetemp(c, rSel);
     compiler_regfreetoend(c, rObj+1);
 
-    /* Move the result to the requested register */
+    // Move the result to the requested register
     if (reqout!=REGISTER_UNALLOCATED && object.dest!=reqout) {
         compiler_addinstruction(c, ENCODE_DOUBLE(OP_MOV, reqout, rObj), node);
         ninstructions++;
