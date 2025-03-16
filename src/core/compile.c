@@ -3267,6 +3267,20 @@ static codeinfo compiler_arglist(compiler *c, syntaxtreenode *node, registerindx
     return CODEINFO(REGISTER, REGISTER_UNALLOCATED, ninstructions);
 }
 
+bool _islocalfunction(compiler *c, value symbol) {
+    functionstate *fc = compiler_currentfunctionstate(c);
+    // Go backwards to prioritize recent def'ns
+    for (functionstate *f=fc;
+         f>c->fstack; // Note inequality: don't include the global functionstate 
+         f--) {
+        for (int i=f->functionref.count-1; i>=0; i--) { // Go backwards
+            functionref *ref=&f->functionref.data[i];
+            if (MORPHO_ISEQUAL(ref->symbol, symbol)) return true;
+        }
+    }
+    return false;
+}
+
 /** Is this a method invocation? */
 static bool compiler_isinvocation(compiler *c, syntaxtreenode *call) {
     bool isinvocation=false;
@@ -3288,7 +3302,7 @@ static bool compiler_isinvocation(compiler *c, syntaxtreenode *call) {
         objectclass *klass = compiler_getcurrentclass(c);
         
         if (klass &&
-            compiler_findsymbol(compiler_currentfunctionstate(c), selector->content)==REGISTER_UNALLOCATED &&
+            !_islocalfunction(c, selector->content) &&
             dictionary_get(&klass->methods, selector->content, NULL)) {
             isinvocation=true;
         }
