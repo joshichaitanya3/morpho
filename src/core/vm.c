@@ -1886,7 +1886,7 @@ bool morpho_call(vm *v, value f, int nargs, value *args, value *ret) {
             } else morpho_runtimeerror(v, VM_NOINITIALIZER, MORPHO_GETCSTRING(klass->name));
             
             if (success) {
-                vm_bindobject(v, obj);
+                vm_bindobjectwithoutcollect(v, obj); // 4/2/25 Changed to disable collection because we can't guarantee the external context of the caller (e.g. apply)
                 *ret = obj;
             } else morpho_freeobject(obj);
         } else morpho_runtimeerror(v, VM_INSTANTIATEFAILED);
