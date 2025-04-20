@@ -1091,6 +1091,10 @@ double tripts[] = {
     0.3333333333333333, 0.3333333333333333, 0.3333333333333333
 };
 
+double tri0wts[] = {
+    1.0
+};
+
 double tri4wts[] = {
     -0.5625, 0.5208333333333332, 0.5208333333333332, 0.5208333333333332
 };
@@ -1141,6 +1145,16 @@ quadraturerule tri4 = {
     .ext = &tri10
 };
 
+quadraturerule tri0 = {
+    .name = "tri0",
+    .grade = 2,
+    .order = 1, // 1pt rule is order 1,
+    .nnodes = 1,
+    .nodes = tripts,
+    .weights = tri0wts,
+    .ext = &tri4
+};
+
 // CUBTRI rule from D. P. Laurie, ACM Transactions on Mathematical Software, Vol 8, No. 2, June 1982,Pages 210-218
 
 double cubtripts[] = {
@@ -1164,6 +1178,10 @@ double cubtripts[] = {
     0.738416812340510066,0.232102326775050368,0.0294808608844395667,
     0.0294808608844395667,0.738416812340510066,0.232102326775050368,
     0.232102326775050368,0.738416812340510066,0.0294808608844395667
+};
+
+double cubtri0wts[] = {
+    1.0
 };
 
 double cubtri7wts[] = {
@@ -1200,6 +1218,16 @@ quadraturerule cubtri7 = {
     .nodes = cubtripts,
     .weights = cubtri7wts,
     .ext = &cubtri19
+};
+
+quadraturerule cubtri0 = {
+    .name = "cubtri0",
+    .grade = 2,
+    .order = 1,
+    .nnodes = 1,
+    .nodes = cubtripts,
+    .weights = cubtri0wts,
+    .ext = &cubtri7
 };
 
 // Grundmann-Möller embedded rules:
@@ -1271,6 +1299,10 @@ double grundmann2dpts[] = {
     0.3846153846153846, 0.07692307692307693, 0.5384615384615384,
     0.2307692307692308, 0.07692307692307693, 0.6923076923076923,
     0.07692307692307693, 0.07692307692307693, 0.8461538461538461,
+};
+
+double grundmann2d0wts[] = {
+    1.0
 };
 
 double grundmann2d1wts[] = {
@@ -1368,6 +1400,16 @@ quadraturerule grundmann2d1 = {
     .nodes = grundmann2dpts,
     .weights = grundmann2d1wts,
     .ext = &grundmann2d2
+};
+
+quadraturerule grundmann2d0 = {
+    .name = "grundmann2d0",
+    .grade = 2,
+    .order = 1,
+    .nnodes = 1,
+    .nodes = grundmann2dpts,
+    .weights = grundmann2d0wts,
+    .ext = &grundmann2d1
 };
 
 /* --------------------------------
@@ -1746,6 +1788,10 @@ double grundmann3dpts[] = {
        0.071428571428571428571,0.071428571428571428571,0.071428571428571428571
 };
 
+double grundmann3d0wts[] = {
+    1.0
+};
+
 double grundmann3d1wts[] = {
     -0.8,0.45,0.45,0.45,0.45
 };
@@ -1895,6 +1941,16 @@ quadraturerule grundmann3d1 = {
     .ext = &grundmann3d2
 };
 
+quadraturerule grundmann3d0 = {
+    .name = "grundmann3d0",
+    .grade = 3,
+    .order = 1,
+    .nnodes = 1,
+    .nodes = grundmann3dpts,
+    .weights = grundmann3d0wts,
+    .ext = &grundmann3d1
+};
+
 /* --------------------------------
  * List of quadrature rules
  * -------------------------------- */
@@ -1906,14 +1962,14 @@ quadraturerule *quadrules[] = {
     &gauss5, &kronrod11,
     &gauss7, &kronrod15,
 
-    &tri4, &tri10, &tri20,
-    &cubtri7, &cubtri19,
-    &grundmann2d1, &grundmann2d2, &grundmann2d3, &grundmann2d4, &grundmann2d5,
+    &tri0, &tri4, &tri10, &tri20,
+    &cubtri0, &cubtri7, &cubtri19,
+    &grundmann2d0, &grundmann2d1, &grundmann2d2, &grundmann2d3, &grundmann2d4, &grundmann2d5,
     
     &keast4, &keast5,
     &tet5, &tet6,
 
-    &grundmann3d1, &grundmann3d2, &grundmann3d3, &grundmann3d4, &grundmann3d5,
+    &grundmann3d0, &grundmann3d1, &grundmann3d2, &grundmann3d3, &grundmann3d4, &grundmann3d5,
     NULL
 };
 
@@ -2411,7 +2467,8 @@ bool integrator_quadrature(integrator *integrate, quadraturerule *rule, quadratu
             eps[ip]=fabs(r[ip]-r[ip-1]);
             nmin = q->nnodes;
             
-            if (fabs(eps[ip]/r[ip])<1e-14) break;
+            if (fabs(r[ip])<integrate->ztol ||
+                fabs(eps[ip]/r[ip])<integrate->tol) break;
         }
         
         work->lval = work->weight*r[ip-1];
