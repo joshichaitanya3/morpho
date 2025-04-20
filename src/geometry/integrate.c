@@ -1973,6 +1973,14 @@ quadraturerule *quadrules[] = {
     NULL
 };
 
+// Specify a list of default rules for each grade
+quadraturerule *defaultquadrule[] = {
+    &gauss5,
+    &cubtri7,
+    &grundmann3d0,
+    NULL
+};
+
 /* **********************************************
  * Subdivision rules
  * ********************************************** */
@@ -2617,6 +2625,17 @@ bool integrator_matchrulebyorder(int grade, int minorder, int maxorder, bool hig
     return (best>=0);
 }
 
+/** Returns a default rule for each grade */
+bool integrator_matchrulebygrade(int grade, quadraturerule **out) {
+    for (int i=0; defaultquadrule[i]!=NULL; i++) {
+        if (defaultquadrule[i]->grade==grade) {
+            *out = defaultquadrule[i];
+            return true;
+        }
+    }
+    return false;
+}
+
 /** Configures an integrator based on the grade to integrate and hints for order and rule type
  * @param[in] integrate     - integrator structure to be configured
  * @param[in] err                  - error structure to report errors to
@@ -2637,8 +2656,10 @@ bool integrator_configure(integrator *integrate, error *err, bool adapt, int gra
             error_writewithid(err, INTEGRATE_RLNTFND, name);
             return false;
         }
+    } else if (order>=0) {
+        integrator_matchrulebyorder(grade, order, INT_MAX, false, &integrate->rule);
     } else {
-        integrator_matchrulebyorder(grade, (order<0 ? 0 : order), INT_MAX, (order<0), &integrate->rule);
+        integrator_matchrulebygrade(grade, &integrate->rule);
     }
     
     // Check we succeeded in finding a rule
