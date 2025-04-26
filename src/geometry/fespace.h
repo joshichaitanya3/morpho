@@ -7,8 +7,7 @@
 #ifndef fespace_h
 #define fespace_h
 
-#include "mesh.h"
-#include "field.h"
+#include "geometry.h"
 
 /* -------------------------------------------------------
  * Discretization type definitions
