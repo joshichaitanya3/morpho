@@ -1,0 +1,23 @@
+// A local function supercedes a method call
+
+class A {
+  foo() {
+    fn goo(x) {
+      print "Boo"
+    }
+
+    goo("Hoo")
+  }
+
+  goo(x) {
+    print x
+  }
+}
+
+var a = A() 
+
+a.foo() 
+// expect: Boo
+
+a.goo("Woo") 
+// expect: Woo
