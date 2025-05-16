@@ -28,7 +28,7 @@ def morphoMethods(clss):
     return [] 
 
 
-classes = [ "Array", "List", "String", "System", "Tuple" ]
+classes = [ "Array", "Bool", "Complex", "Dictionary", "Error", "File", "Float", "Function", "Int",  "Invocation", "JSON", "List", "Range", "String", "System", "Tuple" ]
 
 results = []
 
