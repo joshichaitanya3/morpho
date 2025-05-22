@@ -1,0 +1,51 @@
+// Solve Laplace's equation on a square domain by minimizing |grad V|^2
+// Uses CG2 elements
+
+import meshtools
+import plot
+import optimize4
+
+var delta=0.25/8 // Mesh spacing
+var L = 1 // Size of domain
+
+// Create the mesh
+var mesh = AreaMesh(fn (u,v) [ u, v, 0 ], -L/2..L/2:delta, -L/2..L/2:delta)
+mesh.addgrade(1)
+
+// Create boundaries and select edges, building up from selecting vertices
+var bnd = Selection(mesh, boundary=true)
+var bnd1 = Selection(mesh, fn (x,y,z) abs(x+L/2)<0.01 || abs(y+L/2)<0.01)
+var bnd2 = Selection(mesh, fn (x,y,z) abs(x-L/2)<0.01 || abs(y-L/2)<0.01)
+for (b in [bnd, bnd1, bnd2]) b.addgrade(1)
+
+bnd1=bnd.intersection(bnd1)
+bnd2=bnd.intersection(bnd2)
+
+// Create field
+var phi = Field(mesh, fn (x,y,z) 0, finiteelementspace=FiniteElementSpace("CG2", grade=2))
+
+// Set up the problem
+var problem = OptimizationProblem(mesh)
+
+fn integrand(x, q) {
+  var dg = grad(q).norm()
+  return dg*dg
+}
+
+var v1 = 0, v2 = 1
+var lt1 = LineIntegral(fn (x, v) (v-v1)^2, phi, method={})
+problem.addenergy(lt1, selection=bnd1, prefactor=100)
+
+var lt2 = LineIntegral(fn (x, v) (v-v2)^2, phi, method={})
+problem.addenergy(lt2, selection=bnd2, prefactor=100)
+
+var le = AreaIntegral(integrand, phi, method={})
+problem.addenergy(le)
+
+var adapt = ProblemAdapter(problem, phi)
+
+var control = LBFGSController(adapt)
+control.optimize(1000)
+
+// Display the result
+Show(plotmesh(mesh, grade=1) + plotfield(phi, style="interpolate"))
