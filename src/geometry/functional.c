@@ -4570,6 +4570,15 @@ bool lineintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int *
 
     integral_freetlvars(v);
     
+    // Free gradient information
+    for (int i=0; i<iref.nfields; i++) {
+        if (MORPHO_ISLIST(qgrad[i])) {
+            objectlist *l = MORPHO_GETLIST(qgrad[i]);
+            for (int j=0; j<l->val.count; j++) morpho_freeobject(l->val.data[j]);
+        }
+        morpho_freeobject(qgrad[i]);
+    }
+    
     return success;
 }
 
@@ -4836,6 +4845,7 @@ bool volumeintegral_integrand(vm *v, objectmesh *mesh, elementid id, int nv, int
     if (success) *out *=elref.elementsize;
 
     integral_freetlvars(v);
+    
     for (int i=0; i<iref.nfields; i++) {
         if (MORPHO_ISLIST(qgrad[i])) {
             objectlist *l = MORPHO_GETLIST(qgrad[i]);
