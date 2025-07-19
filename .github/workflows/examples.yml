@@ -48,6 +48,11 @@ jobs:
         cd build
         cmake ..
         sudo make install
+    - name: morphopm 
+      run: |
+        git clone https://github.com/Morpho-lang/morpho-morphopm.git
+        cd morpho-morphopm 
+        morphopm install optimize4 
     - name: test 
       run: |
         cd examples
