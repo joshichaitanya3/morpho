@@ -52,7 +52,7 @@ jobs:
       run: |
         git clone https://github.com/Morpho-lang/morpho-morphopm.git
         cd morpho-morphopm 
-        morphopm install optimize4 
+        ./morphopm install optimize4 
     - name: test 
       run: |
         cd examples
