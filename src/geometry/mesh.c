@@ -4,6 +4,9 @@
  *  @brief Mesh class and associated functionality
  */
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include "morpho.h"
 #include "classes.h"
 #include "mesh.h"
@@ -533,7 +536,7 @@ static int mesh_compareid(const void *a, const void *b) {
  * @param[out] nmatches - the number of matches found
  * @param[out] matches - matched vertex ids
  * @returns true on success, false otherwise */
-static bool mesh_matchelements(objectsparse *vmatrix, grade g, int nids, int *ids, int maxmatches, int *nmatches, int *matches) {
+bool mesh_matchelements(objectsparse *vmatrix, grade g, int nids, int *ids, int maxmatches, int *nmatches, int *matches) {
     int nentries[nids], *entries[nids], length=0, k=0;
 
     /* Obtain connectivity information from the columns of vertex connectivity matrix */
@@ -1339,3 +1342,5 @@ void mesh_initialize(void) {
     morpho_defineerror(MESH_ADDSYMMSNGTRNSFRM, ERROR_HALT, MESH_ADDSYMMSNGTRNSFRM_MSG);
     morpho_defineerror(MESH_CONSTRUCTORARGS, ERROR_HALT, MESH_CONSTRUCTORARGS_MSG);
 }
+
+#endif

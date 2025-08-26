@@ -4,15 +4,17 @@
  *  @brief Define constants that choose how Morpho is built
  */
 
+#include <float.h>
+
 /* **********************************************************************
  * Version
  * ********************************************************************** */
 
-#define MORPHO_VERSIONSTRING "0.6.2"
+#define MORPHO_VERSIONSTRING "0.6.3"
 
 #define MORPHO_VERSION_MAJOR 0
 #define MORPHO_VERSION_MINOR 6
-#define MORPHO_VERSION_PATCH 2
+#define MORPHO_VERSION_PATCH 3
 
 /* **********************************************************************
  * Paths and file system
@@ -45,7 +47,10 @@
  * ********************************************************************** */
 
 /** Value used to detect zero */
-#define MORPHO_EPS 1e-16
+#define MORPHO_EPS DBL_EPSILON
+
+/** Relative tolerance used to compare double precision equality */
+#define MORPHO_RELATIVE_EPS DBL_EPSILON
 
 /* **********************************************************************
  * Size limits
@@ -90,7 +95,7 @@
 #define MORPHO_NAN_BOXING
 #endif
 /** @brief Number of bytes to bind before GC first runs */
-#define MORPHO_GCINITIAL 1024;
+#define MORPHO_GCINITIAL 1024
 /** It seems that DeltaBlue benefits strongly from garbage collecting while the heap is still fairly small */
 
 /** @brief Controls how rapidly the GC tries to collect garbage */
@@ -113,6 +118,19 @@
 
 /** @brief Pad data structures involved in multiprocessing */
 #define _MORPHO_PADDING char __padding[_MORPHO_L1CACHELINESIZE]
+
+/* **********************************************************************
+ * Core library [options set in CMake]
+ * ********************************************************************** */
+
+/** Build with Matrix class using BLAS/LAPACK */
+//#define MORPHO_INCLUDE_LINALG
+
+/** Build with Sparse class */
+//#define MORPHO_INCLUDE_SPARSE
+
+/** Build with geometry classes */
+//#define MORPHO_INCLUDE_GEOMETRY
 
 /* **********************************************************************
  * Libraries
@@ -159,12 +177,6 @@
 
 /** @brief Fill global constant table */
 //#define MORPHO_DEBUG_FILLGLOBALCONSTANTTABLE
-
-/** @brief Log optimizer */
-//#define MORPHO_DEBUG_LOGOPTIMIZER
-
-/** @brief Log help file parsing */
-//#define MORPHO_DEBUG_LOGHELPFILES
 
 /** @brief Debug symbol table */
 //#define MORPHO_DEBUG_SYMBOLTABLE

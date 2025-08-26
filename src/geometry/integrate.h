@@ -7,9 +7,13 @@
 #ifndef integration_h
 #define integration_h
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include <stdio.h>
 #include "morpho.h"
 #include "dict.h"
+#include "fespace.h"
 
 #define INTEGRATE_RULELABEL "rule"
 #define INTEGRATE_DEGREELABEL "degree"
@@ -99,30 +103,42 @@ typedef struct {
 DECLARE_VARRAY(quadratureworkitem, quadratureworkitem)
 
 /* ----------------------------------
+ * Quantities
+ * ---------------------------------- */
+
+typedef struct {
+    int nnodes;  /** Number of quantity values per element */
+    value *vals; /** List of quantity values */
+    interpolationfn ifn; /** Interpolation function */
+    int ndof; /** Number of degrees of freedom (this will be filled out by the integrator) */
+} quantity;
+
+/* ----------------------------------
  * Integrator
  * ---------------------------------- */
 
 typedef struct {
     integrandfunction *integrand; /** Function to integrate */
+    void *ref; /** Reference to pass to integrand function */
     
     int dim; /** Dimension of points in embedded space */
-    int nbary; /** Number of barycentric coordinates */
-    int nquantity; /** Number of quantities to interpolate */
-    int nqdof; /** Number of quantity degrees of freedom */
-    int ndof; /** Number of degrees of freedom */
+    double **x; /** Vertices defining the element */
     
-    bool adapt; /** Enable adaptive integration */
+    int nbary; /** Number of barycentric coordinates */
+    
+    int nquantity; /** Number of quantities to interpolate */
+    quantity *quantity; /** Quantity list */
+    value *qval; /** Interpolated quantity values */
+    
     quadraturerule *rule;  /** Quadrature rule to use */
     quadraturerule *errrule; /** Additional rule for error estimation */
     
+    bool adapt; /** Enable adaptive integration */
     subdivisionrule *subdivide; /** Subdivision rule to use */
     
-    int workp; /** Index of largest item in the work list */
-    int freep; /** Index of a free item in the work list */
     varray_quadratureworkitem worklist; /** Work list */
     varray_double vertexstack; /** Stack of vertices */
     varray_int elementstack; /** Stack of elements */
-    varray_value quantitystack; /** Stack of quantities */
     
     double ztol; /** Tolerance for zero detection */
     double tol; /** Tolerance for relative error */
@@ -130,22 +146,26 @@ typedef struct {
     
     int niterations; /** Number of iterations performed */
     double val; /** Estimated value of the integral */
-    double err; /** Estimated error of the integral */
+    double errest; /** Estimated error of the integral */
     
-    error emsg; /** Store error messages from the integrator */
-    
-    void *ref; /** Reference to pass to integrand */
+    error *err; /** Error structure to report errors */
 } integrator;
 
 /* -------------------------------------------------------
  * Integrator errors
  * ------------------------------------------------------- */
 
-#define INTEGRATE_QDRTRMXSBDVSNS      "QdrtrMxSbdvns"
-#define INTEGRATE_QDRTRMXSBDVSNS_MSG  "Maximum number of subdivisions reached in integrator."
+#define INTEGRATE_SBDVSNS             "IntgrtrSbdvns"
+#define INTEGRATE_SBDVSNS_MSG         "Too many subdivisions in evaluating integral; possible singularity detected."
 
-#define INTEGRATE_QDRTRRLNTFND        "QdrtrRlNtFnd"
-#define INTEGRATE_QDRTRRLNTFND_MSG    "Quadrature rule not found."
+#define INTEGRATE_RLNTFND             "IntgrtrRlNtFnd"
+#define INTEGRATE_RLNTFND_MSG         "Integrator quadrature rule '%s' not found."
+
+#define INTEGRATE_RLUNAVLB            "IntgrtrRlUnavlb"
+#define INTEGRATE_RLUNAVLB_MSG        "No quadrature rule is available that matches the provided integrator method dictionary."
+
+#define INTEGRATE_MTHDTYP             "IntgrtrMthdTyp"
+#define INTEGRATE_MTHDTYP_MSG         "Integrator method dictionary option '%s' must be a %s."
 
 /* -------------------------------------------------------
  * Integrator interface
@@ -153,8 +173,11 @@ typedef struct {
 
 bool integrate_integrate(integrandfunction *integrand, unsigned int dim, unsigned int grade, double **x, unsigned int nquantity, value **quantity, void *ref, double *out);
 
-bool integrate(integrandfunction *integrand, objectdictionary *method, unsigned int dim, unsigned int grade, double **x, unsigned int nquantity, value **quantity, void *ref, double *out, double *err);
+bool integrate(integrandfunction *integrand, objectdictionary *method, error *err, unsigned int dim, unsigned int grade, double **x, unsigned int nquantity, quantity *quantity, void *ref, double *out, double *errest);
 
-void integrate_test(void);
+void integrate_initialize(void);
+
+#endif
 
 #endif /* integration_h */
+

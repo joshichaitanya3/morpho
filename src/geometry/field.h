@@ -7,6 +7,9 @@
 #ifndef field_h
 #define field_h
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include "object.h"
 #include "mesh.h"
 #include "matrix.h"
@@ -32,6 +35,8 @@ typedef struct {
     unsigned int nelements; /** Total number of elements in the fireld */
     void *pool; /** Pool of statically allocated objects */
     
+    value fnspc; /** Function space used */
+    
     objectmatrix data; /** Underlying data store */
 } objectfield;
 
@@ -42,17 +47,33 @@ typedef struct {
 #define MORPHO_GETFIELD(val)   ((objectfield *) MORPHO_GETOBJECT(val))
 
 /** Creates an empty field object */
-objectfield *object_newfield(objectmesh *mesh, value prototype, unsigned int *dof);
+objectfield *object_newfield(objectmesh *mesh, value prototype, value disc, unsigned int *shape);
+
+/* -------------------------------------------------------
+ * Indexing a Field
+ * ------------------------------------------------------- */
+
+typedef struct {
+    grade g;      // The grade
+    elementid id; // The element
+    int indx;     // Quantity index
+} fieldindx;
 
 /* -------------------------------------------------------
  * Field class
  * ------------------------------------------------------- */
 
+extern value field_gradeoption;
+
 #define FIELD_CLASSNAME "Field"
 
 #define FIELD_GRADEOPTION "grade"
+#define FIELD_FESPACEOPTION "finiteelementspace"
+
 #define FIELD_OP_METHOD      "op"
 #define FIELD_SHAPE_METHOD   "shape"
+#define FIELD_FESPACE_METHOD   "finiteelementspace"
+#define FIELD_PROTOTYPE_METHOD   "prototype"
 #define FIELD_MESH_METHOD    "mesh"
 #define FIELD_LINEARIZE_METHOD    "linearize"
 #define FIELD__LINEARIZE_METHOD    "__linearize"
@@ -93,10 +114,14 @@ unsigned int field_sizeprototype(value prototype);
 unsigned int field_dofforgrade(objectfield *f, grade g);
 bool field_getelement(objectfield *field, grade grade, elementid el, int indx, value *out);
 bool field_getelementwithindex(objectfield *field, int indx, value *out);
+bool field_getindex(objectfield *field, grade grade, elementid el, int indx, int *out);
 bool field_getelementaslist(objectfield *field, grade grade, elementid el, int indx, unsigned int *nentries, double **out);
 
 bool field_setelement(objectfield *field, grade grade, elementid el, int indx, value val);
+bool field_setelementwithindex(objectfield *field, int ix, value val);
 
 void field_initialize(void);
+
+#endif
 
 #endif /* field_h */

@@ -1,0 +1,23 @@
+// A method reference supersedes a global function definition
+
+fn goo(x) {
+  print "Boo"
+}
+
+class A {
+  foo() {
+    goo("Hoo")
+  }
+
+  goo(x) {
+    print x
+  }
+}
+
+var a = A() 
+
+a.foo() 
+// expect: Hoo
+
+a.goo("Woo") 
+// expect: Woo

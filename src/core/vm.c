@@ -137,15 +137,17 @@ bool vm_start(vm *v, program *p) {
 
 /** Frees all objects bound to a virtual machine */
 void vm_freeobjects(vm *v) {
-    long k=0;
 #ifdef MORPHO_DEBUG_LOGGARBAGECOLLECTOR
+    long k = 0;
     morpho_printf(v, "--- Freeing objects bound to VM ---\n");
 #endif
     object *next=NULL;
     for (object *e=v->objects; e!=NULL; e=next) {
         next = e->next;
         object_free(e);
+#ifdef MORPHO_DEBUG_LOGGARBAGECOLLECTOR
         k++;
+#endif
     }
 
 #ifdef MORPHO_DEBUG_LOGGARBAGECOLLECTOR
@@ -1886,7 +1888,7 @@ bool morpho_call(vm *v, value f, int nargs, value *args, value *ret) {
             } else morpho_runtimeerror(v, VM_NOINITIALIZER, MORPHO_GETCSTRING(klass->name));
             
             if (success) {
-                vm_bindobject(v, obj);
+                vm_bindobjectwithoutcollect(v, obj); // 4/2/25 Changed to disable collection because we can't guarantee the external context of the caller (e.g. apply)
                 *ret = obj;
             } else morpho_freeobject(obj);
         } else morpho_runtimeerror(v, VM_INSTANTIATEFAILED);

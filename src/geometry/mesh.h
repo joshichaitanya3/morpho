@@ -8,6 +8,9 @@
 #ifndef mesh_h
 #define mesh_h
 
+#include "build.h"
+#ifdef MORPHO_INCLUDE_GEOMETRY
+
 #include "varray.h"
 #include "matrix.h"
 #include "sparse.h"
@@ -144,6 +147,7 @@ objectsparse *mesh_addgrade(objectmesh *mesh, grade g);
 objectsparse *mesh_addconnectivityelement(objectmesh *mesh, unsigned int row, unsigned int col);
 objectsparse *mesh_getconnectivityelement(objectmesh *mesh, unsigned int row, unsigned int col);
 
+bool mesh_matchelements(objectsparse *vmatrix, grade g, int nids, int *ids, int maxmatches, int *nmatches, int *matches);
 
 bool mesh_getconnectivity(objectsparse *conn, elementid id, int *nentries, int **entries);
 void mesh_freezeconnectivity(objectmesh *mesh);
@@ -157,5 +161,7 @@ bool mesh_getsynonyms(objectmesh *mesh, grade g, elementid id, varray_elementid 
 int mesh_findneighbors(objectmesh *mesh, grade g, elementid id, grade target, varray_elementid *neighbors);
 
 void mesh_initialize(void);
+
+#endif
 
 #endif /* mesh_h */
